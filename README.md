@@ -97,11 +97,8 @@ Please use the dataset preparation instructions provided in [DATASET.md](timesfo
 Training the default TimeSformer that uses divided space-time attention, and operates on 8-frame clips cropped at 224x224 spatial resolution, can be done using the following command:
 
 ```
-python tools/run_net.py \
-  --cfg configs/Kinetics/TimeSformer_divST_8x32_224.yaml \
-  DATA.PATH_TO_DATA_DIR path_to_your_dataset \
-  NUM_GPUS 8 \
-  TRAIN.BATCH_SIZE 8 \
+python tools/run_net.py --cfg configs/Kinetics/TimeSformer_divST_8x32_224.yaml DATA.PATH_TO_DATA_DIR path_to_your_dataset NUM_GPUS 1  TRAIN.BATCH_SIZE 2 
+python tools/run_net.py --cfg /mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/TimeSformer/configs/SSv2/TimeSformer_divST_8_224.yaml NUM_GPUS 1  TRAIN.BATCH_SIZE 2 
 ```
 You may need to pass location of your dataset in the command line by adding `DATA.PATH_TO_DATA_DIR path_to_your_dataset`, or you can simply add
 

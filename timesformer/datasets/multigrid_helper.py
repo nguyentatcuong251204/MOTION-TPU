@@ -1,9 +1,10 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 
 """Helper functions for multigrid training."""
-
+# from torch import inf
 import numpy as np
-from torch._six import int_classes as _int_classes
+# from torch import int_classes as _int_classes
+_int_classes = int
 from torch.utils.data.sampler import Sampler
 
 

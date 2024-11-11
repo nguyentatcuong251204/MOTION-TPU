@@ -9,11 +9,11 @@ import math
 import warnings
 import torch.nn.functional as F
 import numpy as np
-
+from torch import inf
 from timesformer.models.vit_utils import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from timesformer.models.helpers import load_pretrained
 from timesformer.models.vit_utils import DropPath, to_2tuple, trunc_normal_
-
+# import logging
 from .build import MODEL_REGISTRY
 from torch import einsum
 from einops import rearrange, reduce, repeat
@@ -35,6 +35,7 @@ default_cfgs = {
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
     ),
 }
+
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -70,6 +71,7 @@ class Attention(nn.Module):
     def forward(self, x):
         B, N, C = x.shape
         if self.with_qkv:
+        #    print('[The qkc dimentions]', B, N, 3, self.num_heads, C // self.num_heads)
            qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
            q, k, v = qkv[0], qkv[1], qkv[2]
         else:
@@ -89,17 +91,25 @@ class Attention(nn.Module):
 class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0.1, act_layer=nn.GELU, norm_layer=nn.LayerNorm, attention_type='divided_space_time'):
+                 drop_path=0.1, act_layer=nn.GELU, norm_layer=nn.LayerNorm, attention_type='divided_space_time', pretrain_attn = None, pretrain_spatial_embs = None):
         super().__init__()
         self.attention_type = attention_type
-        assert(attention_type in ['divided_space_time', 'space_only','joint_space_time'])
-
+        assert(attention_type in ['divided_space_time', 'space_only','joint_space_time', 'time_only'])
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
            dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
+        
+        ## Pretrain LVm modules
+        self.pretrain_attn = pretrain_attn
+        self.pretrain_spatial_embs = pretrain_spatial_embs
+        # stride = 64//28
+        # kernelsize = 64-(28-1)*stride
+        # m = nn.MaxPool2d(kernelsize, stride=stride)
+        # m = nn.MaxPool2d((kernelsize, kernelsize), stride=(stride, stride))
+        # self.x_spatial = m(pretrain_spatial_embs)
 
         ## Temporal Attention Parameters
-        if self.attention_type == 'divided_space_time':
+        if self.attention_type in ['divided_space_time', 'time_only']:
             self.temporal_norm1 = norm_layer(dim)
             self.temporal_attn = Attention(
               dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop)
@@ -112,7 +122,7 @@ class Block(nn.Module):
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
 
 
-    def forward(self, x, B, T, W):
+    def forward(self, x, B, T, W, x_spatial = None):
         num_spatial_tokens = (x.size(1) - 1) // T
         H = num_spatial_tokens // W
 
@@ -152,6 +162,31 @@ class Block(nn.Module):
             x = x + self.drop_path(self.mlp(self.norm2(x)))
             return x
 
+        elif self.attention_type == 'time_only':
+            ## Temporal
+            xt = x[:,1:,:]
+            xt = rearrange(xt, 'b (h w t) m -> (b h w) t m',b=B,h=H,w=W,t=T)
+            res_temporal = self.drop_path(self.temporal_attn(self.temporal_norm1(xt)))
+            res_temporal = rearrange(res_temporal, '(b h w) t m -> b (h w t) m',b=B,h=H,w=W,t=T)
+            res_temporal = self.temporal_fc(res_temporal)
+            # xt = x[:,1:,:] + res_temporal
+
+            ## Spatial
+            init_cls_token = x[:,0,:].unsqueeze(1)
+            cls_token = x_spatial[:,0,:]
+            cls_token = rearrange(cls_token, '(b t) m -> b t m',b=B,t=T)
+            cls_token = torch.mean(cls_token,1,True) ## averaging for every frame
+            xs = x_spatial[:, 1:, :]
+            xs = rearrange(xs, '(b t) (h w) m -> b (h w t) m',b=B,h=H,w=W,t=T)
+
+            ## Mlp
+            # print(res_temporal.device.type, xs.device.type)
+            # print(xs.shape, res_temporal.shape, init_cls_token.shape, cls_token.shape)
+            x = torch.cat((init_cls_token, res_temporal), 1) + torch.cat((cls_token, xs), 1)
+            x = x + self.drop_path(self.mlp(self.norm2(x)))
+            return x
+
+
 class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
@@ -174,21 +209,70 @@ class PatchEmbed(nn.Module):
         x = x.flatten(2).transpose(1, 2)
         return x, T, W
 
+class PreVisual_PatchEmbed(nn.Module):
+    """ Image to Patch Embedding
+    """
+    def __init__(self, inferencer, img_size=1024, patch_size=16, in_chans=3, embed_dim=1024):
+        super().__init__()
+        img_size = to_2tuple(img_size)
+        patch_size = to_2tuple(patch_size)
+        num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.num_patches = num_patches
+
+        self.proj = inferencer.model.backbone.patch_embed.projection.to('cpu')
+
+    def forward(self, x):
+        B, C, T, H, W = x.shape
+        x = rearrange(x, 'b c t h w -> (b t) c h w')
+        x = self.proj(x)
+        # print(x.shape)
+        # # from 64x64 to 14x14 by pooling
+        # stride = 64//14
+        # kernelsize = 64-(14-1)*stride
+        # m = nn.MaxPool2d(kernelsize, stride=stride)
+        # m = nn.MaxPool2d((kernelsize, kernelsize), stride=(stride, stride))
+        # x = m(x)
+        # print(x.shape)
+        W = x.size(-1)
+        x = x.flatten(2).transpose(1, 2)
+        return x, T, W
 
 class VisionTransformer(nn.Module):
     """ Vision Transformere
     """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12,
-                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
-                 drop_path_rate=0.1, hybrid_backbone=None, norm_layer=nn.LayerNorm, num_frames=8, attention_type='divided_space_time', dropout=0.):
+    # def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12, pretrain_space_embs = None,
+    #              num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
+    #              drop_path_rate=0.1, hybrid_backbone=None, norm_layer=nn.LayerNorm, num_frames=8, attention_type='divided_space_time', dropout=0.):
+    def __init__(self, img_size=1024, patch_size=16, in_chans=3, num_classes=1000, embed_dim=1024, depth=12, pretrain_space_embs_path = "/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/checkpoints/sapiens_0.3b/sapiens_0.3b_epoch_1600_clean.pth",
+                num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
+                drop_path_rate=0.1, hybrid_backbone=None, norm_layer=nn.LayerNorm, num_frames=8, attention_type='time_only', dropout=0.):
         super().__init__()
         self.attention_type = attention_type
         self.depth = depth
+        self.pretrain_space_embs_path = pretrain_space_embs_path
         self.dropout = nn.Dropout(dropout)
         self.num_classes = num_classes
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+
+        ## Load Sapiens   
+        from mmpretrain import FeatureExtractor, get_model
+        # import os
+        # import time
+        # from argparse import ArgumentParser
+
+        if(self.attention_type == 'time_only'):
+            assert self.pretrain_space_embs_path != None, "Please input pretrain_space_embs=path/to/pretrain_sapiens_models"
+            config = "/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/configs/sapiens_mae/humans_300m_test/mae_sapiens_0.3b-p16_8xb512-coslr-1600e_humans_300m_test.py"
+            # checkpoint = "/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/checkpoints/sapiens_0.3b/sapiens_0.3b_epoch_1600_clean.pth"
+            self.pretrain_space_embs = get_model(model=config, pretrained=self.pretrain_space_embs_path, device='cpu', backbone=dict(out_indices=(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24))).eval()
+            # self.pretrain_space_embs.model.backbone.out_type = 'featmap'
+            # results, inputs, outputs = self.pretrain_space_embs(image_path)
+        ## Patch Embeddings
+
         self.patch_embed = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
+            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim) #if(self.attention_type != 'time_only') else PreVisual_PatchEmbed(self.pretrain_space_embs, img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
         num_patches = self.patch_embed.num_patches
 
         ## Positional Embeddings
@@ -216,7 +300,7 @@ class VisionTransformer(nn.Module):
         self.apply(self._init_weights)
 
         ## initialization of temporal attention weights
-        if self.attention_type == 'divided_space_time':
+        if self.attention_type in ['divided_space_time', 'time_only']:
             i = 0
             for m in self.blocks.modules():
                 m_str = str(m)
@@ -247,9 +331,16 @@ class VisionTransformer(nn.Module):
         self.head = nn.Linear(self.embed_dim, num_classes) if num_classes > 0 else nn.Identity()
 
     def forward_features(self, x):
+        ## pre-extract [2, 4, 6, ..., 24] embeddings from pretrained Sapiens as frozen space embs
+        with torch.no_grad():
+            x_spatial = self.pretrain_space_embs(rearrange(x, 'b c t h w -> (b t) c h w'))
+        # print('x_spatial len', len(x_spatial))
+
+        ## Start regular TimeSFormer
         B = x.shape[0]
         x, T, W = self.patch_embed(x)
         cls_tokens = self.cls_token.expand(x.size(0), -1, -1)
+        print(cls_tokens.shape, x.shape, T, W)
         x = torch.cat((cls_tokens, x), dim=1)
 
         ## resizing the positional embeddings in case they don't match the input at inference
@@ -288,8 +379,14 @@ class VisionTransformer(nn.Module):
             x = torch.cat((cls_tokens, x), dim=1)
 
         ## Attention blocks
-        for blk in self.blocks:
-            x = blk(x, B, T, W)
+        if(self.attention_type == 'time_only'):
+            for idx, blk in enumerate(self.blocks):
+                # print(idx)
+                x = blk(x, B, T, W, x_spatial[idx])
+        else:
+            for idx, blk in enumerate(self.blocks):
+                # print(idx)
+                x = blk(x, B, T, W)
 
         ### Predictions for space-only baseline
         if self.attention_type == 'space_only':
@@ -303,6 +400,7 @@ class VisionTransformer(nn.Module):
         x = self.forward_features(x)
         x = self.head(x)
         return x
+
 
 def _conv_filter(state_dict, patch_size=16):
     """ convert patch embedding weight from manual patchify + linear proj to conv"""
@@ -343,6 +441,22 @@ class TimeSformer(nn.Module):
 
         self.attention_type = attention_type
         self.model.default_cfg = default_cfgs['vit_base_patch'+str(patch_size)+'_224']
+        self.num_patches = (img_size // patch_size) * (img_size // patch_size)
+        if self.pretrained:
+            load_pretrained(self.model, num_classes=self.model.num_classes, in_chans=kwargs.get('in_chans', 3), filter_fn=_conv_filter, img_size=img_size, num_frames=num_frames, num_patches=self.num_patches, attention_type=self.attention_type, pretrained_model=pretrained_model)
+    def forward(self, x):
+        x = self.model(x)
+        return x
+    
+@MODEL_REGISTRY.register()
+class TimePSformer(nn.Module):
+    def __init__(self, img_size=224, patch_size=16, num_classes=400, num_frames=8, attention_type='divided_space_time',  pretrained_model='', **kwargs):
+        super(TimePSformer, self).__init__()
+        self.pretrained=False
+        self.model = VisionTransformer(img_size=img_size, num_classes=num_classes, patch_size=patch_size, embed_dim=1024, depth=12, num_heads=16, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1, num_frames=num_frames, attention_type=attention_type, **kwargs)
+
+        self.attention_type = attention_type
+        # self.model.default_cfg = default_cfgs['vit_base_patch'+str(patch_size)+'_224']
         self.num_patches = (img_size // patch_size) * (img_size // patch_size)
         if self.pretrained:
             load_pretrained(self.model, num_classes=self.model.num_classes, in_chans=kwargs.get('in_chans', 3), filter_fn=_conv_filter, img_size=img_size, num_frames=num_frames, num_patches=self.num_patches, attention_type=self.attention_type, pretrained_model=pretrained_model)

@@ -6,8 +6,8 @@ TRAIN:
   CHECKPOINT_PERIOD: 5
   AUTO_RESUME: True
 DATA:
-  PATH_TO_DATA_DIR: " /path/to/ssv2/annotations/"
-  PATH_PREFIX: "/path/to/ssv2/frames/"
+  PATH_TO_DATA_DIR: "/mnt/d/ssv2/annotations/"
+  PATH_PREFIX: "/mnt/d/ssv2/frames"
   NUM_FRAMES: 8
   TRAIN_JITTER_SCALES: [256, 320]
   TRAIN_CROP_SIZE: 224
