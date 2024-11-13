@@ -17,6 +17,12 @@ from timesformer.models.vit_utils import DropPath, to_2tuple, trunc_normal_
 from .build import MODEL_REGISTRY
 from torch import einsum
 from einops import rearrange, reduce, repeat
+import sys
+import torch_xla.core.xla_model as xm
+
+# sys.path.append('/home/hongn/sapiens/pretrain')
+# sys.path.append('/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/demo')
+# from extract_feature import *
 
 def _cfg(url='', **kwargs):
     return {
@@ -190,10 +196,12 @@ class Block(nn.Module):
 class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     """
-    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
+    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=1024):
         super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
+        # print('-----------', img_size, patch_size)
+        img_size =  to_2tuple(img_size)
+        patch_size =  to_2tuple(patch_size)
+        # print('-----------', img_size[0], img_size[1], patch_size[0], patch_size[1])
         num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
         self.img_size = img_size
         self.patch_size = patch_size
@@ -245,7 +253,7 @@ class VisionTransformer(nn.Module):
     # def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12, pretrain_space_embs = None,
     #              num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
     #              drop_path_rate=0.1, hybrid_backbone=None, norm_layer=nn.LayerNorm, num_frames=8, attention_type='divided_space_time', dropout=0.):
-    def __init__(self, img_size=1024, patch_size=16, in_chans=3, num_classes=1000, embed_dim=1024, depth=12, pretrain_space_embs_path = "/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/checkpoints/sapiens_0.3b/sapiens_0.3b_epoch_1600_clean.pth",
+    def __init__(self, img_size=1024, patch_size=16, in_chans=3, num_classes=1000, embed_dim=1024, depth=12, pretrain_space_embs_path = "/home/hongn/sapiens/pretrain/checkpoints/sapiens_0.3b/sapiens_0.3b_epoch_1600_clean.pth",
                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
                 drop_path_rate=0.1, hybrid_backbone=None, norm_layer=nn.LayerNorm, num_frames=8, attention_type='time_only', dropout=0.):
         super().__init__()
@@ -264,7 +272,7 @@ class VisionTransformer(nn.Module):
 
         if(self.attention_type == 'time_only'):
             assert self.pretrain_space_embs_path != None, "Please input pretrain_space_embs=path/to/pretrain_sapiens_models"
-            config = "/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/configs/sapiens_mae/humans_300m_test/mae_sapiens_0.3b-p16_8xb512-coslr-1600e_humans_300m_test.py"
+            config = "/home/hongn/sapiens/pretrain/configs/sapiens_mae/humans_300m_test/mae_sapiens_0.3b-p16_8xb512-coslr-1600e_humans_300m_test.py"
             # checkpoint = "/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/checkpoints/sapiens_0.3b/sapiens_0.3b_epoch_1600_clean.pth"
             self.pretrain_space_embs = get_model(model=config, pretrained=self.pretrain_space_embs_path, device='cpu', backbone=dict(out_indices=(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24))).eval()
             # self.pretrain_space_embs.model.backbone.out_type = 'featmap'
@@ -272,7 +280,7 @@ class VisionTransformer(nn.Module):
         ## Patch Embeddings
 
         self.patch_embed = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim) #if(self.attention_type != 'time_only') else PreVisual_PatchEmbed(self.pretrain_space_embs, img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
+            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=self.embed_dim) #if(self.attention_type != 'time_only') else PreVisual_PatchEmbed(self.pretrain_space_embs, img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
         num_patches = self.patch_embed.num_patches
 
         ## Positional Embeddings
@@ -332,15 +340,16 @@ class VisionTransformer(nn.Module):
 
     def forward_features(self, x):
         ## pre-extract [2, 4, 6, ..., 24] embeddings from pretrained Sapiens as frozen space embs
-        with torch.no_grad():
-            x_spatial = self.pretrain_space_embs(rearrange(x, 'b c t h w -> (b t) c h w'))
+        if self.attention_type == 'time_only':
+            with torch.no_grad():
+                x_spatial = self.pretrain_space_embs(rearrange(x, 'b c t h w -> (b t) c h w'))
         # print('x_spatial len', len(x_spatial))
 
         ## Start regular TimeSFormer
         B = x.shape[0]
         x, T, W = self.patch_embed(x)
         cls_tokens = self.cls_token.expand(x.size(0), -1, -1)
-        print(cls_tokens.shape, x.shape, T, W)
+        # print(cls_tokens.shape, x.shape, T, W)
         x = torch.cat((cls_tokens, x), dim=1)
 
         ## resizing the positional embeddings in case they don't match the input at inference
@@ -420,6 +429,25 @@ class vit_base_patch16_224(nn.Module):
         self.pretrained=True
         patch_size = 16
         self.model = VisionTransformer(img_size=cfg.DATA.TRAIN_CROP_SIZE, num_classes=cfg.MODEL.NUM_CLASSES, patch_size=patch_size, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1, num_frames=cfg.DATA.NUM_FRAMES, attention_type=cfg.TIMESFORMER.ATTENTION_TYPE, **kwargs)
+
+        self.attention_type = cfg.TIMESFORMER.ATTENTION_TYPE
+        self.model.default_cfg = default_cfgs['vit_base_patch16_224']
+        self.num_patches = (cfg.DATA.TRAIN_CROP_SIZE // patch_size) * (cfg.DATA.TRAIN_CROP_SIZE // patch_size)
+        pretrained_model=cfg.TIMESFORMER.PRETRAINED_MODEL
+        if self.pretrained:
+            load_pretrained(self.model, num_classes=self.model.num_classes, in_chans=kwargs.get('in_chans', 3), filter_fn=_conv_filter, img_size=cfg.DATA.TRAIN_CROP_SIZE, num_patches=self.num_patches, attention_type=self.attention_type, pretrained_model=pretrained_model)
+
+    def forward(self, x):
+        x = self.model(x)
+        return x
+    
+@MODEL_REGISTRY.register()
+class vit_base_PS_224(nn.Module):
+    def __init__(self, cfg, **kwargs):
+        super(vit_base_PS_224, self).__init__()
+        self.pretrained=False
+        patch_size = 16
+        self.model = VisionTransformer(img_size=cfg.DATA.TRAIN_CROP_SIZE, num_classes=cfg.MODEL.NUM_CLASSES, patch_size=patch_size, embed_dim=1024, depth=12, num_heads=16, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1, num_frames=cfg.DATA.NUM_FRAMES, attention_type=cfg.TIMESFORMER.ATTENTION_TYPE, **kwargs)
 
         self.attention_type = cfg.TIMESFORMER.ATTENTION_TYPE
         self.model.default_cfg = default_cfgs['vit_base_patch16_224']

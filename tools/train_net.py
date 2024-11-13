@@ -22,6 +22,8 @@ from timesformer.utils.multigrid import MultigridSchedule
 
 from timm.data import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+import torch_xla.core.xla_model as xm
+device = xm.xla_device()
 
 logger = logging.get_logger(__name__)
 
@@ -56,16 +58,16 @@ def train_epoch(
         if cfg.NUM_GPUS:
             if isinstance(inputs, (list,)):
                 for i in range(len(inputs)):
-                    inputs[i] = inputs[i].cuda(non_blocking=True)
+                    inputs[i] = inputs[i].to(device, non_blocking=True)
             else:
-                inputs = inputs.cuda(non_blocking=True)
-            labels = labels.cuda()
+                inputs = inputs.to(device, non_blocking=True)
+            labels = labels.to(device)
             for key, val in meta.items():
                 if isinstance(val, (list,)):
                     for i in range(len(val)):
-                        val[i] = val[i].cuda(non_blocking=True)
+                        val[i] = val[i].to(device,non_blocking=True)
                 else:
-                    meta[key] = val.cuda(non_blocking=True)
+                    meta[key] = val.to(device,non_blocking=True)
 
         # Update the learning rate.
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
@@ -211,16 +213,16 @@ def eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer=None):
             # Transferthe data to the current GPU device.
             if isinstance(inputs, (list,)):
                 for i in range(len(inputs)):
-                    inputs[i] = inputs[i].cuda(non_blocking=True)
+                    inputs[i] = inputs[i].to(device,non_blocking=True)
             else:
-                inputs = inputs.cuda(non_blocking=True)
-            labels = labels.cuda()
+                inputs = inputs.to(device,non_blocking=True)
+            labels = labels.to(device)
             for key, val in meta.items():
                 if isinstance(val, (list,)):
                     for i in range(len(val)):
-                        val[i] = val[i].cuda(non_blocking=True)
+                        val[i] = val[i].to(device,non_blocking=True)
                 else:
-                    meta[key] = val.cuda(non_blocking=True)
+                    meta[key] = val.to(device,non_blocking=True)
         val_meter.data_toc()
 
         if cfg.DETECTION.ENABLE:
@@ -323,9 +325,9 @@ def calculate_and_update_precise_bn(loader, model, num_iters=200, use_gpu=True):
             if use_gpu:
                 if isinstance(inputs, (list,)):
                     for i in range(len(inputs)):
-                        inputs[i] = inputs[i].cuda(non_blocking=True)
+                        inputs[i] = inputs[i].to(device,non_blocking=True)
                 else:
-                    inputs = inputs.cuda(non_blocking=True)
+                    inputs = inputs.to(device,non_blocking=True)
             yield inputs
 
     # Update the bn stats.

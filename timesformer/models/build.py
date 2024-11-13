@@ -4,6 +4,7 @@
 
 import torch
 from fvcore.common.registry import Registry
+import torch_xla.core.xla_model as xm
 
 MODEL_REGISTRY = Registry("MODEL")
 MODEL_REGISTRY.__doc__ = """
@@ -22,20 +23,23 @@ def build_model(cfg, gpu_id=None):
         backbone. Details can be seen in slowfast/config/defaults.py.
         gpu_id (Optional[int]): specify the gpu index to build model.
     """
-    if torch.cuda.is_available():
-        assert (
-            cfg.NUM_GPUS <= torch.cuda.device_count()
-        ), "Cannot use more GPU devices than available"
-    else:
-        assert (
-            cfg.NUM_GPUS == 0
-        ), "Cuda is not available. Please set `NUM_GPUS: 0 for running on CPUs."
+    # if torch.cuda.is_available():
+    #     assert (
+    #         cfg.NUM_GPUS <= torch.cuda.device_count()
+    #     ), "Cannot use more GPU devices than available"
+    # else:
+    #     assert (
+    #         cfg.NUM_GPUS == 0
+    #     ), "Cuda is not available. Please set `NUM_GPUS: 0 for running on CPUs."
 
     # Construct the model
     name = cfg.MODEL.MODEL_NAME
     model = MODEL_REGISTRY.get(name)(cfg)
 
-    if cfg.NUM_GPUS:
+    if cfg.NUM_GPUS == -1:
+        cur_device = xm.xla_device()
+        model.to(device=cur_device)
+    else:
         if gpu_id is None:
             # Determine the GPU used by the current process
             cur_device = torch.cuda.current_device()
