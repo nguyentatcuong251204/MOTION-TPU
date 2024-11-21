@@ -18,8 +18,10 @@ from .build import MODEL_REGISTRY
 from torch import einsum
 from einops import rearrange, reduce, repeat
 import sys
+from mmpretrain import FeatureExtractor, get_model
 import torch_xla.core.xla_model as xm
-
+# import torch_xla.core.xla_model as xm
+device = xm.xla_device()
 # sys.path.append('/home/hongn/sapiens/pretrain')
 # sys.path.append('/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/demo')
 # from extract_feature import *
@@ -217,35 +219,35 @@ class PatchEmbed(nn.Module):
         x = x.flatten(2).transpose(1, 2)
         return x, T, W
 
-class PreVisual_PatchEmbed(nn.Module):
-    """ Image to Patch Embedding
-    """
-    def __init__(self, inferencer, img_size=1024, patch_size=16, in_chans=3, embed_dim=1024):
-        super().__init__()
-        img_size = to_2tuple(img_size)
-        patch_size = to_2tuple(patch_size)
-        num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.num_patches = num_patches
+# class PreVisual_PatchEmbed(nn.Module):
+#     """ Image to Patch Embedding
+#     """
+#     def __init__(self, inferencer, img_size=1024, patch_size=16, in_chans=3, embed_dim=1024):
+#         super().__init__()
+#         img_size = to_2tuple(img_size)
+#         patch_size = to_2tuple(patch_size)
+#         num_patches = (img_size[1] // patch_size[1]) * (img_size[0] // patch_size[0])
+#         self.img_size = img_size
+#         self.patch_size = patch_size
+#         self.num_patches = num_patches
 
-        self.proj = inferencer.model.backbone.patch_embed.projection.to('cpu')
+#         self.proj = inferencer.model.backbone.patch_embed.projection.to('cpu')
 
-    def forward(self, x):
-        B, C, T, H, W = x.shape
-        x = rearrange(x, 'b c t h w -> (b t) c h w')
-        x = self.proj(x)
-        # print(x.shape)
-        # # from 64x64 to 14x14 by pooling
-        # stride = 64//14
-        # kernelsize = 64-(14-1)*stride
-        # m = nn.MaxPool2d(kernelsize, stride=stride)
-        # m = nn.MaxPool2d((kernelsize, kernelsize), stride=(stride, stride))
-        # x = m(x)
-        # print(x.shape)
-        W = x.size(-1)
-        x = x.flatten(2).transpose(1, 2)
-        return x, T, W
+#     def forward(self, x):
+#         B, C, T, H, W = x.shape
+#         x = rearrange(x, 'b c t h w -> (b t) c h w')
+#         x = self.proj(x)
+#         # print(x.shape)
+#         # # from 64x64 to 14x14 by pooling
+#         # stride = 64//14
+#         # kernelsize = 64-(14-1)*stride
+#         # m = nn.MaxPool2d(kernelsize, stride=stride)
+#         # m = nn.MaxPool2d((kernelsize, kernelsize), stride=(stride, stride))
+#         # x = m(x)
+#         # print(x.shape)
+#         W = x.size(-1)
+#         x = x.flatten(2).transpose(1, 2)
+#         return x, T, W
 
 class VisionTransformer(nn.Module):
     """ Vision Transformere
@@ -265,16 +267,17 @@ class VisionTransformer(nn.Module):
         self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
 
         ## Load Sapiens   
-        from mmpretrain import FeatureExtractor, get_model
         # import os
         # import time
         # from argparse import ArgumentParser
 
         if(self.attention_type == 'time_only'):
             assert self.pretrain_space_embs_path != None, "Please input pretrain_space_embs=path/to/pretrain_sapiens_models"
-            config = "/home/hongn/sapiens/pretrain/configs/sapiens_mae/humans_300m_test/mae_sapiens_0.3b-p16_8xb512-coslr-1600e_humans_300m_test.py"
+            model_config = "/home/hongn/sapiens/pretrain/configs/sapiens_mae/humans_300m_test/mae_sapiens_0.3b-p16_8xb512-coslr-1600e_humans_300m_test.py"
             # checkpoint = "/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/checkpoints/sapiens_0.3b/sapiens_0.3b_epoch_1600_clean.pth"
-            self.pretrain_space_embs = get_model(model=config, pretrained=self.pretrain_space_embs_path, device='cpu', backbone=dict(out_indices=(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24))).eval()
+            with torch.no_grad():
+                self.pretrain_space_embs = get_model(model=model_config, pretrained=self.pretrain_space_embs_path, device='cpu', backbone=dict(out_indices=(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24)))
+                self.pretrain_space_embs.requires_grad = False
             # self.pretrain_space_embs.model.backbone.out_type = 'featmap'
             # results, inputs, outputs = self.pretrain_space_embs(image_path)
         ## Patch Embeddings
@@ -342,7 +345,9 @@ class VisionTransformer(nn.Module):
         ## pre-extract [2, 4, 6, ..., 24] embeddings from pretrained Sapiens as frozen space embs
         if self.attention_type == 'time_only':
             with torch.no_grad():
-                x_spatial = self.pretrain_space_embs(rearrange(x, 'b c t h w -> (b t) c h w'))
+                x_temp = rearrange(x, 'b c t h w -> (b t) c h w')
+                x_spatial = self.pretrain_space_embs(x_temp)
+            # x_spatial.requires_grad = False
         # print('x_spatial len', len(x_spatial))
 
         ## Start regular TimeSFormer
@@ -396,6 +401,9 @@ class VisionTransformer(nn.Module):
             for idx, blk in enumerate(self.blocks):
                 # print(idx)
                 x = blk(x, B, T, W)
+
+        ## Free redundant space in TPU
+        del x_spatial
 
         ### Predictions for space-only baseline
         if self.attention_type == 'space_only':

@@ -102,7 +102,7 @@ def train_epoch(
 
 
         if cur_global_batch_size >= cfg.GLOBAL_BATCH_SIZE:
-            # Perform the backward pass.
+        # Perform the backward pass.
             optimizer.zero_grad()
             loss.backward()
             # Update the parameters.
@@ -113,7 +113,8 @@ def train_epoch(
             loss.backward()
             if (cur_iter + 1) % num_iters == 0:
                 for p in model.parameters():
-                    p.grad /= num_iters
+                    if(p.grad is not None):
+                        p.grad /= num_iters
                 optimizer.step()
                 optimizer.zero_grad()
 
