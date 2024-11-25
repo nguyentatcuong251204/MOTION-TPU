@@ -25,8 +25,8 @@ from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 import torch_xla as xla
 import torch_xla.core.xla_model as xm
 
-device = xm.xla_device()
-logger = logging.get_logger(__name__)
+# device = xm.xla_device()
+# logger = logging.get_logger(__name__)
 
 
 def train_epoch(
@@ -46,6 +46,8 @@ def train_epoch(
         writer (TensorboardWriter, optional): TensorboardWriter object
             to writer Tensorboard log.
     """
+    device = xm.xla_device()
+    logger = logging.get_logger(__name__)
     # Enable train mode.
     model.train()
     train_meter.iter_tic()
