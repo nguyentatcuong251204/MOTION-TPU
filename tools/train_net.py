@@ -22,9 +22,10 @@ from timesformer.utils.multigrid import MultigridSchedule
 
 from timm.data import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
+import torch_xla as xla
 import torch_xla.core.xla_model as xm
-device = xm.xla_device()
 
+device = xm.xla_device()
 logger = logging.get_logger(__name__)
 
 
@@ -55,7 +56,7 @@ def train_epoch(
 
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
         # Transfer the data to the current GPU device.
-        if cfg.NUM_GPUS:
+        if cfg.TPU_ENABLE == False:
             if isinstance(inputs, (list,)):
                 for i in range(len(inputs)):
                     inputs[i] = inputs[i].to(device, non_blocking=True)
@@ -68,6 +69,23 @@ def train_epoch(
                         val[i] = val[i].to(device,non_blocking=True)
                 else:
                     meta[key] = val.to(device,non_blocking=True)
+        elif cfg.TPU_ENABLE == True:
+            with xla.step():
+                if isinstance(inputs, (list,)):
+                    for i in range(len(inputs)):
+                        inputs[i] = inputs[i].to(device, non_blocking=True)
+                else:
+                    inputs = inputs.to(device, non_blocking=True)
+                labels = labels.to(device)
+                for key, val in meta.items():
+                    if isinstance(val, (list,)):
+                        for i in range(len(val)):
+                            val[i] = val[i].to(device,non_blocking=True)
+                    else:
+                        meta[key] = val.to(device,non_blocking=True)
+        else:
+            assert False, "Select incorrect NUM_GPUS"
+
 
         # Update the learning rate.
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
@@ -102,21 +120,42 @@ def train_epoch(
 
 
         if cur_global_batch_size >= cfg.GLOBAL_BATCH_SIZE:
-        # Perform the backward pass.
-            optimizer.zero_grad()
-            loss.backward()
-            # Update the parameters.
-            optimizer.step()
-        else:
-            if cur_iter == 0:
+            if cfg.TPU_ENABLE == False:
+            # Perform the backward pass.
                 optimizer.zero_grad()
-            loss.backward()
-            if (cur_iter + 1) % num_iters == 0:
-                for p in model.parameters():
-                    if(p.grad is not None):
-                        p.grad /= num_iters
+                loss.backward()
+                # Update the parameters.
                 optimizer.step()
-                optimizer.zero_grad()
+            else:
+            # Perform the backward pass.
+                with xla.step():
+                    optimizer.zero_grad()
+                    loss.backward()
+                    # Update the parameters.
+                    xm.optimizer_step(optimizer)
+        else:
+            if cfg.TPU_ENABLE == False:
+                if cur_iter == 0:
+                    optimizer.zero_grad()
+                loss.backward()
+                if (cur_iter + 1) % num_iters == 0:
+                    for p in model.parameters():
+                        if(p.grad is not None):
+                            p.grad /= num_iters
+                    optimizer.step()
+                    optimizer.zero_grad()
+            else:
+                with xla.step():
+                    if cur_iter == 0:
+                        optimizer.zero_grad()
+                    loss.backward()
+                    if (cur_iter + 1) % num_iters == 0:
+                        for p in model.parameters():
+                            if(p.grad is not None):
+                                p.grad /= num_iters
+                        # optimizer.step()
+                        xm.optimizer_step(optimizer)
+                        optimizer.zero_grad()
 
         if cfg.DETECTION.ENABLE:
             if cfg.NUM_GPUS > 1:
@@ -184,6 +223,8 @@ def train_epoch(
         train_meter.iter_toc()  # measure allreduce for this meter
         train_meter.log_iter_stats(cur_epoch, cur_iter)
         train_meter.iter_tic()
+
+        xm.mark_step()
 
     # Log epoch stats.
     train_meter.log_epoch_stats(cur_epoch)
@@ -510,6 +551,8 @@ def train(cfg):
         # Evaluate the model on validation set.
         if is_eval_epoch:
             eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer)
+
+        
 
     if writer is not None:
         writer.close()

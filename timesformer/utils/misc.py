@@ -18,6 +18,8 @@ import timesformer.utils.logging as logging
 import timesformer.utils.multiprocessing as mpu
 from timesformer.datasets.utils import pack_pathway_output
 from timesformer.models.batchnorm_helper import SubBatchNorm3d
+import torch_xla as xla
+import torch_xla.distributed.xla_backend
 
 logger = logging.get_logger(__name__)
 
@@ -282,20 +284,36 @@ def launch_job(cfg, init_method, func, daemon=False):
             daemonic processes will be created
     """
     if cfg.NUM_GPUS > 1:
-        torch.multiprocessing.spawn(
-            mpu.run,
-            nprocs=cfg.NUM_GPUS,
-            args=(
-                cfg.NUM_GPUS,
-                func,
-                init_method,
-                cfg.SHARD_ID,
-                cfg.NUM_SHARDS,
-                cfg.DIST_BACKEND,
-                cfg,
-            ),
-            daemon=daemon,
-        )
+        if cfg.TPU_ENABLE == False:
+            torch.multiprocessing.spawn(
+                mpu.run,
+                nprocs=cfg.NUM_GPUS,
+                args=(
+                    cfg.NUM_GPUS,
+                    func,
+                    init_method,
+                    cfg.SHARD_ID,
+                    cfg.NUM_SHARDS,
+                    cfg.DIST_BACKEND,
+                    cfg,
+                ),
+                daemon=daemon,
+            )
+        else:
+            xla.launch(
+                mpu.run_tpu,
+                nprocs=cfg.NUM_GPUS,
+                args=(
+                    cfg.NUM_GPUS,
+                    func,
+                    init_method,
+                    cfg.SHARD_ID,
+                    cfg.NUM_SHARDS,
+                    cfg.DIST_BACKEND,
+                    cfg,
+                ),
+                daemon=daemon,
+            )
     else:
         func(cfg=cfg)
 

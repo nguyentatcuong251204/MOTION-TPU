@@ -345,7 +345,7 @@ class VisionTransformer(nn.Module):
         ## pre-extract [2, 4, 6, ..., 24] embeddings from pretrained Sapiens as frozen space embs
         if self.attention_type == 'time_only':
             with torch.no_grad():
-                x_temp = rearrange(x, 'b c t h w -> (b t) c h w')
+                x_temp = rearrange(x, 'b c t h w -> (b t) c h w').detach()
                 x_spatial = self.pretrain_space_embs(x_temp)
             # x_spatial.requires_grad = False
         # print('x_spatial len', len(x_spatial))
@@ -396,14 +396,14 @@ class VisionTransformer(nn.Module):
         if(self.attention_type == 'time_only'):
             for idx, blk in enumerate(self.blocks):
                 # print(idx)
-                x = blk(x, B, T, W, x_spatial[idx])
+                x = blk(x, B, T, W, x_spatial[idx].detach())
         else:
             for idx, blk in enumerate(self.blocks):
                 # print(idx)
                 x = blk(x, B, T, W)
 
         ## Free redundant space in TPU
-        del x_spatial
+        # del x_spatial
 
         ### Predictions for space-only baseline
         if self.attention_type == 'space_only':

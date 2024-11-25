@@ -36,9 +36,16 @@ def build_model(cfg, gpu_id=None):
     name = cfg.MODEL.MODEL_NAME
     model = MODEL_REGISTRY.get(name)(cfg)
 
-    if cfg.NUM_GPUS == -1:
+    if cfg.TPU_ENABLE == True:
         cur_device = xm.xla_device()
         model.to(device=cur_device)
+
+        # Use multi-process data parallel model in the multi-gpu setting
+        if cfg.NUM_GPUS > 1 :
+            # Make model replica operate on the current device
+            model = torch.nn.parallel.DistributedDataParallel(
+                module=model, gradient_as_bucket_view=True
+            )
     else:
         if gpu_id is None:
             # Determine the GPU used by the current process
@@ -48,11 +55,10 @@ def build_model(cfg, gpu_id=None):
         # Transfer the model to the current GPU device
         model = model.cuda(device=cur_device)
 
-
-    # Use multi-process data parallel model in the multi-gpu setting
-    if cfg.NUM_GPUS > 1:
-        # Make model replica operate on the current device
-        model = torch.nn.parallel.DistributedDataParallel(
-            module=model, device_ids=[cur_device], output_device=cur_device
-        )
+        # Use multi-process data parallel model in the multi-gpu setting
+        if cfg.NUM_GPUS > 1 :
+            # Make model replica operate on the current device
+            model = torch.nn.parallel.DistributedDataParallel(
+                module=model, device_ids=[cur_device], output_device=cur_device
+            )
     return model
