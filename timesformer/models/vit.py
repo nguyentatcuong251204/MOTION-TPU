@@ -19,9 +19,9 @@ from torch import einsum
 from einops import rearrange, reduce, repeat
 import sys
 from mmpretrain import FeatureExtractor, get_model
-import torch_xla.core.xla_model as xm
 # import torch_xla.core.xla_model as xm
-device = xm.xla_device()
+# import torch_xla.core.xla_model as xm
+# device = xm.xla_device()
 # sys.path.append('/home/hongn/sapiens/pretrain')
 # sys.path.append('/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/demo')
 # from extract_feature import *
