@@ -386,10 +386,14 @@ def construct_fake_loader():
     train_dataset_len = 1200000  # Roughly the size of Imagenet dataset.
     train_loader = xu.SampleGenerator(
         data=(torch.zeros(16, 3, 224, 224),
+              torch.zeros(16, dtype=torch.int64), 
+              torch.zeros(16, dtype=torch.int64),
               torch.zeros(16, dtype=torch.int64)),
         sample_count=train_dataset_len // 16 // xr.world_size())
     test_loader = xu.SampleGenerator(
         data=(torch.zeros(16, 3, 224, 224),
+              torch.zeros(16, dtype=torch.int64),
+              torch.zeros(16, dtype=torch.int64),
               torch.zeros(16, dtype=torch.int64)),
         sample_count=50000 // 16 // xr.world_size())
     return train_loader, test_loader
