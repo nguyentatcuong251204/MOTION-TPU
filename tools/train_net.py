@@ -700,7 +700,5 @@ def _mp_fn(index, cfg):
         if is_eval_epoch:
             eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer)
 
-        
-
     if writer is not None:
         writer.close()

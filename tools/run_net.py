@@ -48,23 +48,23 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    args = parse_args()
-    if args.num_shards > 1:
-       args.output_dir = str(args.job_dir)
+    main()
+    # args = parse_args()
+    # if args.num_shards > 1:
+    #    args.output_dir = str(args.job_dir)
 
-    print("LOAD CONFIG in run_net.py")
-    cfg = load_config(args)
+    # print("LOAD CONFIG in run_net.py")
+    # cfg = load_config(args)
 
-    print("LOAD TRAIN TEST FUNC in run_net.py")
-    train, test = get_func(cfg)
+    # print("LOAD TRAIN TEST FUNC in run_net.py")
+    # train, test = get_func(cfg)
 
-    print("START TRAINING in run_net.py")
-    # Perform training.
-    if cfg.TRAIN.ENABLE:
-        # launch_job(cfg=cfg, init_method=args.init_method, func=train)
-        xla.launch(
-                    train,
-                    args=(cfg,),
-                    debug_single_process=1
-                )
+    # print("START TRAINING in run_net.py")
+    # # Perform training.
+    # if cfg.TRAIN.ENABLE:
+    #     # launch_job(cfg=cfg, init_method=args.init_method, func=train)
+    #     xla.launch(
+    #                 train,
+    #                 args=(cfg,),
+    #                 debug_single_process=1
+    #             )
