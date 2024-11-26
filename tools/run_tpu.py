@@ -45,7 +45,7 @@ import torch_xla.debug.metrics as met
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.debug.profiler as xp
 import torch_xla.utils.utils as xu
-
+import torch_xla.distributed.xla_multiprocessing as xmp
 def train_epoch(
     train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None, logger=None, device = 'cpu'
 ):
@@ -537,7 +537,7 @@ if __name__ == "__main__":
     train, test = get_func(cfg)
 
     logger.info("START TRAINING")
-    xla.launch(
+    xmp.spawn(
                 _mp_fn,
                 args=(cfg,),
                 debug_single_process=1
