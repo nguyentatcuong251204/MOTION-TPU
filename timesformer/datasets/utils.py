@@ -10,6 +10,7 @@ import cv2
 import torch
 from fvcore.common.file_io import PathManager
 from torch.utils.data.distributed import DistributedSampler
+from torch_xla import runtime as xr
 
 from . import transform as transform
 
@@ -366,7 +367,10 @@ def create_sampler(dataset, shuffle, cfg):
     Returns:
         sampler (Sampler): the created sampler.
     """
-    sampler = DistributedSampler(dataset) if cfg.NUM_GPUS > 1 else None
+    if(cfg.TRAIN.TPU_ENABLE == False):
+        sampler = DistributedSampler(dataset) if cfg.NUM_GPUS > 1 else None
+    else:
+        sampler = DistributedSampler(dataset, num_replicas=xr.world_size(), rank=xr.global_ordinal(),) if cfg.NUM_GPUS > 1 else None
 
     return sampler
 

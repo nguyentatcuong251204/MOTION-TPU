@@ -449,6 +449,8 @@ def train(cfg):
         if cfg.MULTIGRID.LONG_CYCLE:
             cfg, _ = multigrid.update_long_cycle(cfg, cur_epoch=0)
     # Print config.
+    print("Train with config:")
+    print(pprint.pformat(cfg))
     logger.info("Train with config:")
     logger.info(pprint.pformat(cfg))
 
