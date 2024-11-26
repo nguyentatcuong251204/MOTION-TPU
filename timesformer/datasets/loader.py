@@ -10,10 +10,10 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import RandomSampler
 
 from timesformer.datasets.multigrid_helper import ShortCycleBatchSampler
-
+import torch_xla.distributed.parallel_loader as pl
 from . import utils as utils
 from .build import build_dataset
-
+import torch_xla.core.xla_model as xm
 
 def detection_collate(batch):
     """
@@ -95,7 +95,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
             pin_memory=cfg.DATA_LOADER.PIN_MEMORY,
             worker_init_fn=utils.loader_worker_init_fn(dataset),
         )
-    else:
+    elif cfg.TRAIN.TPU_ENABLE == False:
         # Create a sampler for multi-process training
         sampler = utils.create_sampler(dataset, shuffle, cfg)
         # Create a loader
@@ -110,6 +110,23 @@ def construct_loader(cfg, split, is_precise_bn=False):
             collate_fn=detection_collate if cfg.DETECTION.ENABLE else None,
             worker_init_fn=utils.loader_worker_init_fn(dataset),
         )
+    elif cfg.TRAIN.TPU_ENABLE == True:
+        device = xm.xla_device()
+        # Create a sampler for multi-process training
+        sampler = utils.create_sampler(dataset, shuffle, cfg)
+        # Create a loader
+        temp_loader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=(False if sampler else shuffle),
+            sampler=sampler,
+            num_workers=cfg.DATA_LOADER.NUM_WORKERS,
+            pin_memory=cfg.DATA_LOADER.PIN_MEMORY,
+            drop_last=drop_last,
+            collate_fn=detection_collate if cfg.DETECTION.ENABLE else None,
+            worker_init_fn=utils.loader_worker_init_fn(dataset),
+        )
+        loader = pl.MpDeviceLoader(temp_loader, device)
     return loader
 
 

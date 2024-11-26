@@ -75,16 +75,16 @@ def train_epoch(
             with xla.step():
                 if isinstance(inputs, (list,)):
                     for i in range(len(inputs)):
-                        inputs[i] = inputs[i].to(device, non_blocking=True)
+                        inputs[i] = inputs[i]
                 else:
-                    inputs = inputs.to(device, non_blocking=True)
+                    inputs = inputs
                 labels = labels.to(device)
                 for key, val in meta.items():
                     if isinstance(val, (list,)):
                         for i in range(len(val)):
-                            val[i] = val[i].to(device,non_blocking=True)
+                            val[i] = val[i]
                     else:
-                        meta[key] = val.to(device,non_blocking=True)
+                        meta[key] = val
         else:
             assert False, "Select incorrect NUM_GPUS"
 

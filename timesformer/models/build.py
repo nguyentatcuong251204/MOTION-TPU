@@ -44,8 +44,10 @@ def build_model(cfg, gpu_id=None):
         if cfg.NUM_GPUS > 1 :
             # Make model replica operate on the current device
             model = torch.nn.parallel.DistributedDataParallel(
-                module=model, gradient_as_bucket_view=True
+                module=model, gradient_as_bucket_view=True, broadcast_buffers=False
             )
+
+        xm.broadcast_master_param(model)
     else:
         if gpu_id is None:
             # Determine the GPU used by the current process
