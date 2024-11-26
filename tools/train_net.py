@@ -525,7 +525,7 @@ def train(cfg):
                 )
 
         # Shuffle the dataset.
-        loader.shuffle_dataset(train_loader, cur_epoch)
+        # loader.shuffle_dataset(train_loader, cur_epoch)
 
         # Train for one epoch.
         train_epoch(
@@ -668,7 +668,7 @@ def _mp_fn(index, cfg):
                 )
 
         # Shuffle the dataset.
-        loader.shuffle_dataset(train_loader, cur_epoch)
+        # loader.shuffle_dataset(train_loader, cur_epoch)
 
         # Train for one epoch.
         train_epoch(
