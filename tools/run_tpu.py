@@ -69,15 +69,15 @@ def train_epoch(
     # model.train()
     # train_meter.iter_tic()
     data_size = len(train_loader)
-    print('data_size', data_size)
+    # print('data_size', data_size)
     cur_global_batch_size = cfg.NUM_SHARDS * cfg.TRAIN.BATCH_SIZE
     num_iters = cfg.GLOBAL_BATCH_SIZE // cur_global_batch_size
     # assert False
     logger.info('Start looping for train loader...')
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
         # assert False
-        with xp.StepTrace('train_kinetic', step_num=cur_iter):
-            logger.info('Transfer the data to the current GPU device.')
+        # with xp.StepTrace('train_kinetic', step_num=cur_iter):
+            # logger.info('Transfer the data to the current GPU device.')
             # if cfg.TRAIN.TPU_ENABLE == False:
             #     if isinstance(inputs, (list,)):
             #         for i in range(len(inputs)):
@@ -97,88 +97,88 @@ def train_epoch(
             #     assert False, "Select incorrect NUM_GPUS"
 
 
-            logger.info('Update the learning rate.')
-            lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
-            optim.set_lr(optimizer, lr)
+        # logger.info('Update the learning rate.')
+        lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
+        optim.set_lr(optimizer, lr)
 
-            logger.info('Explicitly declare reduction to mean.')
-            if not cfg.MIXUP.ENABLED:
-                loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
-            else:
-                mixup_fn = Mixup(
-                    mixup_alpha=cfg.MIXUP.ALPHA, cutmix_alpha=cfg.MIXUP.CUTMIX_ALPHA, cutmix_minmax=cfg.MIXUP.CUTMIX_MINMAX, prob=cfg.MIXUP.PROB, switch_prob=cfg.MIXUP.SWITCH_PROB, mode=cfg.MIXUP.MODE,
-                    label_smoothing=0.1, num_classes=cfg.MODEL.NUM_CLASSES)
-                hard_labels = labels
-                inputs, labels = mixup_fn(inputs, labels)
-                loss_fun = SoftTargetCrossEntropy()
+        # logger.info('Explicitly declare reduction to mean.')
+        if not cfg.MIXUP.ENABLED:
+            loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
+        else:
+            mixup_fn = Mixup(
+                mixup_alpha=cfg.MIXUP.ALPHA, cutmix_alpha=cfg.MIXUP.CUTMIX_ALPHA, cutmix_minmax=cfg.MIXUP.CUTMIX_MINMAX, prob=cfg.MIXUP.PROB, switch_prob=cfg.MIXUP.SWITCH_PROB, mode=cfg.MIXUP.MODE,
+                label_smoothing=0.1, num_classes=cfg.MODEL.NUM_CLASSES)
+            hard_labels = labels
+            inputs, labels = mixup_fn(inputs, labels)
+            loss_fun = SoftTargetCrossEntropy()
 
-            if cfg.DETECTION.ENABLE:
-                preds = model(inputs, meta["boxes"])
-            else:
-                preds = model(inputs)
+        if cfg.DETECTION.ENABLE:
+            preds = model(inputs, meta["boxes"])
+        else:
+            preds = model(inputs)
 
-            logger.info('Compute the loss.')
-            loss = loss_fun(preds, labels)
+        logger.info('Compute the loss.')
+        loss = loss_fun(preds, labels)
 
-            if cfg.MIXUP.ENABLED:
-                labels = hard_labels
+        if cfg.MIXUP.ENABLED:
+            labels = hard_labels
 
-            # check Nan Loss.
-            misc.check_nan_losses(loss)
+        # check Nan Loss.
+        misc.check_nan_losses(loss)
 
 
-            if cur_global_batch_size >= cfg.GLOBAL_BATCH_SIZE:
+        if cur_global_batch_size >= cfg.GLOBAL_BATCH_SIZE:
+            optimizer.zero_grad()
+            loss.backward()
+            # Update the parameters.
+            xm.optimizer_step(optimizer)
+        else:
+            if cur_iter == 0:
                 optimizer.zero_grad()
-                loss.backward()
-                # Update the parameters.
+            loss.backward()
+            if (cur_iter + 1) % num_iters == 0:
+                for p in model.parameters():
+                    if(p.grad is not None):
+                        p.grad /= num_iters
+                # optimizer.step()
                 xm.optimizer_step(optimizer)
-            else:
-                if cur_iter == 0:
-                    optimizer.zero_grad()
-                loss.backward()
-                if (cur_iter + 1) % num_iters == 0:
-                    for p in model.parameters():
-                        if(p.grad is not None):
-                            p.grad /= num_iters
-                    # optimizer.step()
-                    xm.optimizer_step(optimizer)
-                    optimizer.zero_grad()
+                optimizer.zero_grad()
 
-            top1_err, top5_err = None, None
-            if cfg.DATA.MULTI_LABEL:
-                # Gather all the predictions across all the devices.
-                if cfg.NUM_GPUS > 1:
-                    [loss] = du.all_reduce([loss])
-                loss = loss.item()
-            else:
-                # Compute the errors.
-                num_topks_correct = metrics.topks_correct(preds, labels, (1, 5))
-                top1_err, top5_err = [
-                    (1.0 - x / preds.size(0)) * 100.0 for x in num_topks_correct
-                ]
-                # Gather all the predictions across all the devices.
-                if cfg.NUM_GPUS > 1:
-                    loss, top1_err, top5_err = du.all_reduce(
-                        [loss, top1_err, top5_err]
-                    )
-
-                # Copy the stats from GPU to CPU (sync point).
-                loss, top1_err, top5_err = (
-                    loss.item(),
-                    top1_err.item(),
-                    top5_err.item(),
+        top1_err, top5_err = None, None
+        if cfg.DATA.MULTI_LABEL:
+            # Gather all the predictions across all the devices.
+            if cfg.NUM_GPUS > 1:
+                [loss] = du.all_reduce([loss])
+            loss = loss.item()
+        else:
+            # Compute the errors.
+            num_topks_correct = metrics.topks_correct(preds, labels, (1, 5))
+            top1_err, top5_err = [
+                (1.0 - x / preds.size(0)) * 100.0 for x in num_topks_correct
+            ]
+            # Gather all the predictions across all the devices.
+            if cfg.NUM_GPUS > 1:
+                loss, top1_err, top5_err = du.all_reduce(
+                    [loss, top1_err, top5_err]
                 )
 
-                if writer is not None:
-                    writer.add_scalars(
-                        {
-                            "Train/loss": loss,
-                            "Train/lr": lr,
-                            "Train/Top1_err": top1_err,
-                            "Train/Top5_err": top5_err,
-                        },
-                        global_step=data_size * cur_epoch + cur_iter,
-                    )
+            # Copy the stats from GPU to CPU (sync point).
+            loss, top1_err, top5_err = (
+                loss.item(),
+                top1_err.item(),
+                top5_err.item(),
+            )
+
+            if writer is not None:
+                writer.add_scalars(
+                    {
+                        "Train/loss": loss,
+                        "Train/lr": lr,
+                        "Train/Top1_err": top1_err,
+                        "Train/Top5_err": top5_err,
+                    },
+                    global_step=data_size * cur_epoch + cur_iter,
+                )
 
         # xm.mark_step()
 
@@ -314,11 +314,11 @@ def construct_loader(cfg, split, is_precise_bn=False):
 
     # Construct the dataset
     dataset = build_dataset(dataset_name, cfg, split)
-    print(dataset[1], dataset[1][0].shape, len(dataset[1]), len(dataset), xr.world_size())
-    print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
-    print('Create a sampler for multi-process training')
+    # print(dataset[1], dataset[1][0].shape, len(dataset[1]), len(dataset), xr.world_size())
+    # print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
+    # print('Create a sampler for multi-process training')
     sampler = create_sampler(dataset[:19872], shuffle, cfg)
-    print('Create a loader')
+    # print('Create a loader')
     loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
@@ -356,7 +356,7 @@ def train(cfg):
     logger = logging.get_logger(__name__)
 
     # Set up environment.
-    logger.info("initialize distributed training...")
+    # logger.info("initialize distributed training...")
     dist.init_process_group(
             "xla", 
             init_method='xla://')
@@ -371,16 +371,16 @@ def train(cfg):
     np.random.seed(cfg.RNG_SEED)
     torch.manual_seed(cfg.RNG_SEED)
 
-    logger.info("initialize xm.xla_device()...")
+    # logger.info("initialize xm.xla_device()...")
     device = xm.xla_device()
 
     # Setup logging format.
     logging.setup_logging(cfg.OUTPUT_DIR)
 
-    logger.info("Train with config:")
+    # logger.info("Train with config:")
     logger.info(pprint.pformat(cfg))
 
-    logger.info("Contruct model...")
+    # logger.info("Contruct model...")
     model = build_model(cfg).to(device)
 
     xm.broadcast_master_param(model)
@@ -404,7 +404,7 @@ def train(cfg):
       start_epoch = 0
       cu.load_checkpoint(cfg.TRAIN.CHECKPOINT_FILE_PATH, model)
 
-    logger.info("Contruct dataloader...")
+    # logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
     # train_loader, val_loader = construct_fake_loader()
     
@@ -483,7 +483,7 @@ if __name__ == "__main__":
     # logger.info("LOAD TRAIN TEST FUNC")
     # train, test = get_func(cfg)
 
-    logger.info("START TRAINING")
+    # logger.info("START TRAINING")
     xla.launch(
                 _mp_fn,
                 args=(cfg,),
