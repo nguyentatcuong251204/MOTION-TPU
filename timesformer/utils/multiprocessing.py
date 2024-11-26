@@ -104,6 +104,7 @@ def run_tpu(
     rank = shard_id * num_proc + local_rank
 
     try:
+        print('torch.distributed try to init_process_group')
         dist.init_process_group(
             "xla", 
             init_method='xla://')
