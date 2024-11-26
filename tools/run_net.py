@@ -5,11 +5,14 @@ from timesformer.utils.misc import launch_job
 from timesformer.utils.parser import load_config, parse_args
 # import torch.distributed as dist
 from tools.test_net import test
-from tools.train_net import train
+from tools.train_net import train, _mp_fn
 import torch_xla as xla
 
 def get_func(cfg):
-    train_func = train
+    if(cfg.TRAIN.TPU_ENABLE == False):
+        train_func = train
+    else:
+        train_func = _mp_fn
     test_func = test
     return train_func, test_func
 
@@ -62,6 +65,6 @@ if __name__ == "__main__":
         # launch_job(cfg=cfg, init_method=args.init_method, func=train)
         xla.launch(
                     train,
-                    args=(cfg),
+                    args=(cfg,),
                     debug_single_process=1
                 )
