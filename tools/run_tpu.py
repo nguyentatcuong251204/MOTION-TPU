@@ -63,7 +63,7 @@ def train_epoch(
     cur_global_batch_size = cfg.NUM_SHARDS * cfg.TRAIN.BATCH_SIZE
     num_iters = cfg.GLOBAL_BATCH_SIZE // cur_global_batch_size
     # assert False
-    logger.info('Start looping for train loader')
+    logger.info('Start looping for train loader...')
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
         with xla.step():
             logger.info('Transfer the data to the current GPU device.')
