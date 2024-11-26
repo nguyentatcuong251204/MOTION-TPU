@@ -338,7 +338,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
     print(dataset[1], dataset[1][0].shape, len(dataset[1]), len(dataset))
     print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
     print('Create a sampler for multi-process training')
-    sampler = None #create_sampler(dataset, shuffle, cfg)
+    sampler = create_sampler(dataset, shuffle, cfg)
     print('Create a loader')
     loader = torch.utils.data.DataLoader(
         dataset,
@@ -354,13 +354,13 @@ def construct_loader(cfg, split, is_precise_bn=False):
 def construct_fake_loader():
     train_dataset_len = 1200000  # Roughly the size of Imagenet dataset.
     train_loader = xu.SampleGenerator(
-        data=(torch.zeros(16, 3, 224, 224),
+        data=(torch.zeros(16, 3, 2, 224, 224),
               torch.zeros(16, dtype=torch.int64), 
               torch.zeros(16, dtype=torch.int64),
               torch.zeros(16, dtype=torch.int64)),
         sample_count=train_dataset_len // 16 // xr.world_size())
     test_loader = xu.SampleGenerator(
-        data=(torch.zeros(16, 3, 224, 224),
+        data=(torch.zeros(16, 3, 2, 224, 224),
               torch.zeros(16, dtype=torch.int64),
               torch.zeros(16, dtype=torch.int64),
               torch.zeros(16, dtype=torch.int64)),
@@ -384,7 +384,6 @@ def train(cfg):
 
     train_loader_temp = construct_loader(cfg, "train")
     val_loader_temp = construct_loader(cfg, "val")
-
 
 
     torch.manual_seed(42)
@@ -428,11 +427,11 @@ def train(cfg):
 
     logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
-    # train_loader, val_loader = construct_fake_loader()
+    train_loader, val_loader = construct_fake_loader()
     
     # print('Create MpDeviceLoader')
-    train_loader = pl.MpDeviceLoader(train_loader_temp, device)
-    val_loader = pl.MpDeviceLoader(val_loader_temp, device)
+    # train_loader = pl.MpDeviceLoader(train_loader_temp, device)
+    # val_loader = pl.MpDeviceLoader(val_loader_temp, device)
 
     # logger.info("Contruct trainloader precise_bn_loader...")
     # precise_bn_loader = (
