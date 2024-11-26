@@ -128,42 +128,21 @@ def train_epoch(
 
 
             if cur_global_batch_size >= cfg.GLOBAL_BATCH_SIZE:
-                if cfg.TRAIN.TPU_ENABLE == False:
-                # Perform the backward pass.
-                    optimizer.zero_grad()
-                    loss.backward()
-                    # Update the parameters.
-                    optimizer.step()
-                else:
-                # Perform the backward pass.
-                    with xla.step():
-                        optimizer.zero_grad()
-                        loss.backward()
-                        # Update the parameters.
-                        xm.optimizer_step(optimizer)
+                optimizer.zero_grad()
+                loss.backward()
+                # Update the parameters.
+                xm.optimizer_step(optimizer)
             else:
-                if cfg.TRAIN.TPU_ENABLE == False:
-                    if cur_iter == 0:
-                        optimizer.zero_grad()
-                    loss.backward()
-                    if (cur_iter + 1) % num_iters == 0:
-                        for p in model.parameters():
-                            if(p.grad is not None):
-                                p.grad /= num_iters
-                        optimizer.step()
-                        optimizer.zero_grad()
-                else:
-                    with xla.step():
-                        if cur_iter == 0:
-                            optimizer.zero_grad()
-                        loss.backward()
-                        if (cur_iter + 1) % num_iters == 0:
-                            for p in model.parameters():
-                                if(p.grad is not None):
-                                    p.grad /= num_iters
-                            # optimizer.step()
-                            xm.optimizer_step(optimizer)
-                            optimizer.zero_grad()
+                if cur_iter == 0:
+                    optimizer.zero_grad()
+                loss.backward()
+                if (cur_iter + 1) % num_iters == 0:
+                    for p in model.parameters():
+                        if(p.grad is not None):
+                            p.grad /= num_iters
+                    # optimizer.step()
+                    xm.optimizer_step(optimizer)
+                    optimizer.zero_grad()
 
             top1_err, top5_err = None, None
             if cfg.DATA.MULTI_LABEL:
