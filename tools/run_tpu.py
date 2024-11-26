@@ -335,7 +335,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
 
     # Construct the dataset
     dataset = build_dataset(dataset_name, cfg, split)
-    print(dataset[1])
+    print(dataset[1], dataset[1][0].shape, len(dataset[1], len(dataset)))
     print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
     print('Create a sampler for multi-process training')
     sampler = None #create_sampler(dataset, shuffle, cfg)
