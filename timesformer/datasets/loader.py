@@ -124,6 +124,8 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
             sampler=sampler,
             num_workers=cfg.DATA_LOADER.NUM_WORKERS,
             pin_memory=cfg.DATA_LOADER.PIN_MEMORY,
+            persistent_workers=True,
+            prefetch_factor=32,
         )
         print('Create MpDeviceLoader')
         loader = pl.MpDeviceLoader(temp_loader, 
