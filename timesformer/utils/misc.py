@@ -302,7 +302,6 @@ def launch_job(cfg, init_method, func, daemon=False):
         else:
             xla.launch(
                 mpu.run_tpu,
-                nprocs=cfg.NUM_GPUS,
                 args=(
                     cfg.NUM_GPUS,
                     func,
