@@ -312,17 +312,16 @@ def train(cfg):
             slowfast/config/defaults.py
     """
     logger = logging.get_logger(__name__)
-    logger.info("initialize xm.xla_device()...")
-    device = xm.xla_device()
 
     # Set up environment.
     logger.info("initialize distributed training...")
-    if(cfg.TRAIN.TPU_ENABLE == False):
-        du.init_distributed_training(cfg)
-    else:
-        dist.init_process_group(
-                "xla", 
-                init_method='xla://')
+    dist.init_process_group(
+            "xla", 
+            init_method='xla://')
+
+    logger.info("initialize xm.xla_device()...")
+    device = xm.xla_device()
+    
     # Set random seed from configs.
     np.random.seed(cfg.RNG_SEED)
     torch.manual_seed(cfg.RNG_SEED)
@@ -345,18 +344,7 @@ def train(cfg):
     logger.info(pprint.pformat(cfg))
 
     logger.info("Contruct model...")
-    # Build the video model and print model statistics.
-    # name = cfg.MODEL.MODEL_NAME
-    # model = MODEL_REGISTRY.get(name)(cfg)
-    # model.to(device=device)
-    # print('broadcast master param')
-    # xm.broadcast_master_param(model)
-    # # Use multi-process data parallel model in the multi-gpu setting
-    # if cfg.NUM_GPUS > 1 :
-    #     # Make model replica operate on the current device
-    #     model = torch.nn.parallel.DistributedDataParallel(
-    #         module=model, gradient_as_bucket_view=True, broadcast_buffers=False
-    #     )
+
     model = build_model(cfg, device=device)
     # if(cfg.TRAIN.TPU_ENABLE):
     #     print('broadcast_master_param')
