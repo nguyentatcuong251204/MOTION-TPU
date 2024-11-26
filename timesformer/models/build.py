@@ -40,7 +40,7 @@ def build_model(cfg, gpu_id=None):
         cur_device = xm.xla_device()
         model.to(device=cur_device)
         
-        print('broadcast_master_param')
+        print('broadcast master param')
         xm.broadcast_master_param(model)
 
         # Use multi-process data parallel model in the multi-gpu setting

@@ -49,7 +49,7 @@ def train_epoch(
 
     logger.info('Turn of Enable .train() mode.')
     # model.train()
-    train_meter.iter_tic()
+    # train_meter.iter_tic()
     data_size = len(train_loader)
 
     cur_global_batch_size = cfg.NUM_SHARDS * cfg.TRAIN.BATCH_SIZE
@@ -93,7 +93,7 @@ def train_epoch(
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
         optim.set_lr(optimizer, lr)
 
-        train_meter.data_toc()
+        # train_meter.data_toc()
 
         logger.info('Explicitly declare reduction to mean.')
         if not cfg.MIXUP.ENABLED:
@@ -111,7 +111,7 @@ def train_epoch(
         else:
             preds = model(inputs)
 
-        # Compute the loss.
+        logger.info('Compute the loss.')
         loss = loss_fun(preds, labels)
 
         if cfg.MIXUP.ENABLED:
@@ -200,16 +200,16 @@ def train_epoch(
                 )
 
             # Update and log stats.
-            train_meter.update_stats(
-                top1_err,
-                top5_err,
-                loss,
-                lr,
-                inputs[0].size(0)
-                * max(
-                    cfg.NUM_GPUS, 1
-                ),  # If running  on CPU (cfg.NUM_GPUS == 1), use 1 to represent 1 CPU.
-            )
+            # train_meter.update_stats(
+            #     top1_err,
+            #     top5_err,
+            #     loss,
+            #     lr,
+            #     inputs[0].size(0)
+            #     * max(
+            #         cfg.NUM_GPUS, 1
+            #     ),  # If running  on CPU (cfg.NUM_GPUS == 1), use 1 to represent 1 CPU.
+            # )
             # write to tensorboard format if available.
             if writer is not None:
                 writer.add_scalars(
@@ -222,15 +222,15 @@ def train_epoch(
                     global_step=data_size * cur_epoch + cur_iter,
                 )
 
-        train_meter.iter_toc()  # measure allreduce for this meter
-        train_meter.log_iter_stats(cur_epoch, cur_iter)
-        train_meter.iter_tic()
+        # train_meter.iter_toc()  # measure allreduce for this meter
+        # train_meter.log_iter_stats(cur_epoch, cur_iter)
+        # train_meter.iter_tic()
 
         xm.mark_step()
 
     # Log epoch stats.
-    train_meter.log_epoch_stats(cur_epoch)
-    train_meter.reset()
+    # train_meter.log_epoch_stats(cur_epoch)
+    # train_meter.reset()
 
 
 @torch.no_grad()
@@ -636,8 +636,8 @@ def _mp_fn(index, cfg):
         else None
     )
 
-    train_meter = TrainMeter(len(train_loader), cfg)
-    val_meter = ValMeter(len(val_loader), cfg)
+    # train_meter = TrainMeter(len(train_loader), cfg)
+    # val_meter = ValMeter(len(val_loader), cfg)
 
     logger.info("Set up writer...")
     # set up writer for logging to Tensorboard format.
