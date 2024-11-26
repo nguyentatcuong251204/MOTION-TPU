@@ -460,9 +460,9 @@ def train(cfg):
 
     logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
-    # train_loader = construct_loader(cfg, "train", device)
-    # val_loader = construct_loader(cfg, "val", device)
-    train_loader, val_loader = construct_fake_loader()
+    train_loader = construct_loader(cfg, "train", device)
+    val_loader = construct_loader(cfg, "val", device)
+    # train_loader, val_loader = construct_fake_loader()
 
     # logger.info("Contruct trainloader precise_bn_loader...")
     # precise_bn_loader = (
