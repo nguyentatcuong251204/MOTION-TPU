@@ -13,7 +13,7 @@ from timesformer.datasets.multigrid_helper import ShortCycleBatchSampler
 import torch_xla.distributed.parallel_loader as pl
 from . import utils as utils
 from .build import build_dataset
-import torch_xla.core.xla_model as xm
+# import torch_xla.core.xla_model as xm
 
 def detection_collate(batch):
     """
@@ -52,7 +52,7 @@ def detection_collate(batch):
     return inputs, labels, video_idx, collated_extra_data
 
 
-def construct_loader(cfg, split, is_precise_bn=False):
+def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
     """
     Constructs the data loader for the given dataset.
     Args:
@@ -113,7 +113,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
         )
     elif cfg.TRAIN.TPU_ENABLE == True:
         print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
-        device = xm.xla_device()
+        # device = xm.xla_device()
         print('Create a sampler for multi-process training')
         sampler = utils.create_sampler(dataset, shuffle, cfg)
         print('Create a loader')

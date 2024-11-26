@@ -66,7 +66,6 @@ def train_epoch(
     logger.info('Start looping for train loader')
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
         with xla.step():
-
             logger.info('Transfer the data to the current GPU device.')
             if cfg.TRAIN.TPU_ENABLE == False:
                 if isinstance(inputs, (list,)):
@@ -410,8 +409,8 @@ def _mp_fn(index, cfg):
 
     logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
-    train_loader = loader.construct_loader(cfg, "train")
-    val_loader = loader.construct_loader(cfg, "val")
+    train_loader = loader.construct_loader(cfg, "train", device)
+    val_loader = loader.construct_loader(cfg, "val", device)
 
     logger.info("Contruct trainloader precise_bn_loader...")
     precise_bn_loader = (
