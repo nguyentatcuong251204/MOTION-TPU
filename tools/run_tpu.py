@@ -199,7 +199,7 @@ def train_epoch(
                     },
                     global_step=data_size * cur_epoch + cur_iter,
                 )
-                
+
         xm.mark_step()
 
 
@@ -329,7 +329,7 @@ def create_sampler(dataset, shuffle, cfg):
 
     return sampler
 
-def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
+def construct_loader(cfg, split, device, is_precise_bn=False):
     """
     Constructs the data loader for the given dataset.
     Args:
@@ -368,7 +368,6 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
         shuffle=(False if sampler else shuffle),
         sampler=sampler,
         num_workers=cfg.DATA_LOADER.NUM_WORKERS,
-        pin_memory=cfg.DATA_LOADER.PIN_MEMORY,
         persistent_workers=True,
         prefetch_factor=32,
     )
