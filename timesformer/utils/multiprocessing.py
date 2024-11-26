@@ -63,17 +63,7 @@ def run(
     if output_queue is not None and local_rank == 0:
         output_queue.put(ret)
 
-def run_tpu(
-    local_rank,
-    num_proc,
-    func,
-    init_method,
-    shard_id,
-    num_shards,
-    backend,
-    cfg,
-    output_queue=None,
-):
+def run_tpu():
     """
     Runs a function from a child process.
     Args:
