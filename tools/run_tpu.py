@@ -330,7 +330,7 @@ def create_sampler(dataset, shuffle, cfg):
 
     return sampler
 
-def construct_loader(cfg, split, device, is_precise_bn=False):
+def construct_loader(cfg, split, is_precise_bn=False):
     """
     Constructs the data loader for the given dataset.
     Args:
@@ -363,7 +363,7 @@ def construct_loader(cfg, split, device, is_precise_bn=False):
     print('Create a sampler for multi-process training')
     sampler = None #create_sampler(dataset, shuffle, cfg)
     print('Create a loader')
-    temp_loader = torch.utils.data.DataLoader(
+    loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=batch_size,
         shuffle=(False if sampler else shuffle),
@@ -372,14 +372,6 @@ def construct_loader(cfg, split, device, is_precise_bn=False):
         # persistent_workers=True,
         # prefetch_factor=1,
     )
-    print('Create MpDeviceLoader')
-    loader = pl.MpDeviceLoader(temp_loader, 
-                                device,
-                                # loader_prefetch_size=1,
-                                # device_prefetch_size=1,
-                                # host_to_device_transfer_threads=1
-                                )
-    
     return loader
 
 def construct_fake_loader():
@@ -413,38 +405,33 @@ def train(cfg):
             "xla", 
             init_method='xla://')
 
-    logger.info("initialize xm.xla_device()...")
-    device = xm.xla_device()
-    
+    train_loader_temp = construct_loader(cfg, "train")
+    val_loader_temp = construct_loader(cfg, "val")
+
+    torch.manual_seed(42)
+
     # Set random seed from configs.
     np.random.seed(cfg.RNG_SEED)
     torch.manual_seed(cfg.RNG_SEED)
 
+    logger.info("initialize xm.xla_device()...")
+    device = xm.xla_device()
+
     # Setup logging format.
     logging.setup_logging(cfg.OUTPUT_DIR)
-
-    logger.info(" Init multigrid....")
-    # Init multigrid.
-    multigrid = None
-    if cfg.MULTIGRID.LONG_CYCLE or cfg.MULTIGRID.SHORT_CYCLE:
-        multigrid = MultigridSchedule()
-        cfg = multigrid.init_multigrid(cfg)
-        if cfg.MULTIGRID.LONG_CYCLE:
-            cfg, _ = multigrid.update_long_cycle(cfg, cur_epoch=0)
 
     logger.info("Train with config:")
     logger.info(pprint.pformat(cfg))
 
     logger.info("Contruct model...")
-    model = build_model(cfg)
-    model.to(device=device)
-    print('broadcast master param')
+    model = build_model(cfg).to(device=device)
+
     xm.broadcast_master_param(model)
     # Use multi-process data parallel model in the multi-gpu setting
     if cfg.NUM_GPUS > 1 :
         # Make model replica operate on the current device
         model = torch.nn.parallel.DistributedDataParallel(
-            module=model, gradient_as_bucket_view=True
+            module=model, gradient_as_bucket_view=True, broadcast_buffers=False
         )
 
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
@@ -462,10 +449,11 @@ def train(cfg):
 
     logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
-    train_loader = construct_loader(cfg, "train", device)
-    val_loader = construct_loader(cfg, "val", device)
     # train_loader, val_loader = construct_fake_loader()
-
+    
+    print('Create MpDeviceLoader')
+    train_loader = pl.MpDeviceLoader(train_loader_temp, device)
+    val_loader = pl.MpDeviceLoader(val_loader_temp, device)
     # logger.info("Contruct trainloader precise_bn_loader...")
     # precise_bn_loader = (
     #     construct_loader(cfg, "train", is_precise_bn=True)
@@ -538,7 +526,7 @@ if __name__ == "__main__":
     train, test = get_func(cfg)
 
     logger.info("START TRAINING")
-    xmp.spawn(
+    xla.launch(
                 _mp_fn,
                 args=(cfg,),
             )
