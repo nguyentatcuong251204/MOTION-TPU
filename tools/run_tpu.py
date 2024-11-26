@@ -468,7 +468,7 @@ def _mp_fn(index, cfg):
     global CFG
     CFG = cfg
     torch.set_default_dtype(torch.float32)
-    train()
+    train(cfg)
 
 
 if __name__ == "__main__":
