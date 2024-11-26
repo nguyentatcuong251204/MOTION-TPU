@@ -335,7 +335,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
 
     # Construct the dataset
     dataset = build_dataset(dataset_name, cfg, split)
-
+    print(dataset[1])
     print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
     print('Create a sampler for multi-process training')
     sampler = None #create_sampler(dataset, shuffle, cfg)
@@ -385,7 +385,7 @@ def train(cfg):
     train_loader_temp = construct_loader(cfg, "train")
     val_loader_temp = construct_loader(cfg, "val")
 
-    print(train_loader_temp[1])
+
 
     torch.manual_seed(42)
 
