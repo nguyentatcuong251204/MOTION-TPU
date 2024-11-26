@@ -117,7 +117,7 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
         print('Create a sampler for multi-process training')
         sampler = utils.create_sampler(dataset, shuffle, cfg)
         print('Create a loader')
-        loader = torch.utils.data.DataLoader(
+        temp_loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=(False if sampler else shuffle),
@@ -125,12 +125,12 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
             num_workers=cfg.DATA_LOADER.NUM_WORKERS,
             pin_memory=cfg.DATA_LOADER.PIN_MEMORY,
         )
-        # print('Create MpDeviceLoader')
-        # loader = pl.MpDeviceLoader(temp_loader, 
-        #                            device,
-        #                            loader_prefetch_size=128,
-        #                            device_prefetch_size=1,
-        #                            host_to_device_transfer_threads=4)
+        print('Create MpDeviceLoader')
+        loader = pl.MpDeviceLoader(temp_loader, 
+                                   device,
+                                   loader_prefetch_size=128,
+                                   device_prefetch_size=1,
+                                   host_to_device_transfer_threads=4)
     return loader
 
 

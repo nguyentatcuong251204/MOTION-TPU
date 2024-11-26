@@ -67,7 +67,7 @@ def train_epoch(
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
         with xla.step():
             logger.info('Transfer the data to the current GPU device.')
-            if True:
+            if cfg.TRAIN.TPU_ENABLE == False:
                 if isinstance(inputs, (list,)):
                     for i in range(len(inputs)):
                         inputs[i] = inputs[i].to(device, non_blocking=True)
