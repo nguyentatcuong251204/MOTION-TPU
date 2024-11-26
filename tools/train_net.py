@@ -6,7 +6,7 @@ import numpy as np
 import pprint
 import torch
 from fvcore.nn.precise_bn import get_bn_modules, update_bn_stats
-
+import torch.distributed as dist
 import timesformer.models.losses as losses
 import timesformer.models.optimizer as optim
 import timesformer.utils.checkpoint as cu
@@ -433,7 +433,12 @@ def train(cfg):
             slowfast/config/defaults.py
     """
     # Set up environment.
-    du.init_distributed_training(cfg)
+    if(cfg.TRAIN.TPU_ENABLE == False):
+        du.init_distributed_training(cfg)
+    else:
+        dist.init_process_group(
+                "xla", 
+                init_method='xla://')
     # Set random seed from configs.
     np.random.seed(cfg.RNG_SEED)
     torch.manual_seed(cfg.RNG_SEED)

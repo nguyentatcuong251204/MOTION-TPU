@@ -3,10 +3,10 @@
 """Wrapper to train and test a video classification model."""
 from timesformer.utils.misc import launch_job
 from timesformer.utils.parser import load_config, parse_args
-
+# import torch.distributed as dist
 from tools.test_net import test
 from tools.train_net import train
-
+import torch_xla as xla
 
 def get_func(cfg):
     train_func = train
@@ -45,4 +45,22 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    args = parse_args()
+    if args.num_shards > 1:
+       args.output_dir = str(args.job_dir)
+
+    print("LOAD CONFIG in run_net.py")
+    cfg = load_config(args)
+
+    print("LOAD TRAIN TEST FUNC in run_net.py")
+    train, test = get_func(cfg)
+
+    print("START TRAINING in run_net.py")
+    # Perform training.
+    if cfg.TRAIN.ENABLE:
+        # launch_job(cfg=cfg, init_method=args.init_method, func=train)
+        xla.launch(
+                    train,
+                    debug_single_process=1
+                )
