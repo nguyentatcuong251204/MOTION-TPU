@@ -374,7 +374,7 @@ def construct_loader(cfg, split, device, is_precise_bn=False):
     print('Create MpDeviceLoader')
     loader = pl.MpDeviceLoader(temp_loader, 
                                 device,
-                                loader_prefetch_size=4,
+                                loader_prefetch_size=1,
                                 device_prefetch_size=1,
                                 host_to_device_transfer_threads=1)
     
