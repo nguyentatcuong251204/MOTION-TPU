@@ -10,7 +10,7 @@ from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data.sampler import RandomSampler
 
 from timesformer.datasets.multigrid_helper import ShortCycleBatchSampler
-import torch_xla.distributed.parallel_loader as pl
+# import torch_xla.distributed.parallel_loader as pl
 from . import utils as utils
 from .build import build_dataset
 # import torch_xla.core.xla_model as xm

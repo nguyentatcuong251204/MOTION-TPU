@@ -10,7 +10,7 @@ import cv2
 import torch
 from fvcore.common.file_io import PathManager
 from torch.utils.data.distributed import DistributedSampler
-from torch_xla import runtime as xr
+# from torch_xla import runtime as xr
 
 from . import transform as transform
 

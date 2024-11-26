@@ -29,13 +29,14 @@ from timesformer.utils.meters import TrainMeter, ValMeter
 from timesformer.utils.multigrid import MultigridSchedule
 # from fvcore.common.registry import Registry
 # import torch_xla.core.xla_model as xm
-
+from torch_xla import runtime as xr
+import torch_xla.distributed.parallel_loader as pl
 # MODEL_REGISTRY = Registry("MODEL")
 from timm.data import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 import torch_xla as xla
 import torch_xla.core.xla_model as xm
-
+from torch_xla import runtime as xr
 # device = xm.xla_device()
 # logger = logging.get_logger(__name__)
 
@@ -62,7 +63,7 @@ def train_epoch(
     # model.train()
     # train_meter.iter_tic()
     data_size = len(train_loader)
-
+    print('data_size', data_size)
     cur_global_batch_size = cfg.NUM_SHARDS * cfg.TRAIN.BATCH_SIZE
     num_iters = cfg.GLOBAL_BATCH_SIZE // cur_global_batch_size
     # assert False
