@@ -68,6 +68,7 @@ def train_epoch(
     # assert False
     logger.info('Start looping for train loader...')
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
+        assert False
         with xla.step():
             logger.info('Transfer the data to the current GPU device.')
             if cfg.TRAIN.TPU_ENABLE == False:
@@ -337,18 +338,13 @@ def train(cfg):
         cfg = multigrid.init_multigrid(cfg)
         if cfg.MULTIGRID.LONG_CYCLE:
             cfg, _ = multigrid.update_long_cycle(cfg, cur_epoch=0)
-    # Print config.
-    # print("Train with config:")
-    # print(pprint.pformat(cfg))
+
     logger.info("Train with config:")
     logger.info(pprint.pformat(cfg))
 
     logger.info("Contruct model...")
 
     model = build_model(cfg, device=device)
-    # if(cfg.TRAIN.TPU_ENABLE):
-    #     print('broadcast_master_param')
-    #     xm.broadcast_master_param(model)
 
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
         misc.log_model_info(model, cfg, use_train_input=True)

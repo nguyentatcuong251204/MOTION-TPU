@@ -116,6 +116,7 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
         # device = xm.xla_device()
         print('Create a sampler for multi-process training')
         sampler = utils.create_sampler(dataset, shuffle, cfg)
+        # sampler = DistributedSampler(dataset, num_replicas=xr.world_size(), rank=xr.global_ordinal()) if xr.world_size() > 1 else None
         print('Create a loader')
         temp_loader = torch.utils.data.DataLoader(
             dataset,
