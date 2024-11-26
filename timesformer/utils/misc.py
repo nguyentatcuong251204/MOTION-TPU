@@ -300,7 +300,7 @@ def launch_job(cfg, init_method, func, daemon=False):
                 daemon=daemon,
             )
         else:
-            mpu.run_tpu()
+            # mpu.run_tpu()
             xla.launch(
                 func,
                 debug_single_process=1
