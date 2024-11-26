@@ -378,7 +378,7 @@ def train(cfg):
     logging.setup_logging(cfg.OUTPUT_DIR)
 
     # logger.info("Train with config:")
-    logger.info(pprint.pformat(cfg))
+    # logger.info(pprint.pformat(cfg))
 
     # logger.info("Contruct model...")
     model = build_model(cfg).to(device)
