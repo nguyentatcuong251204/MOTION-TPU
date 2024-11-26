@@ -5,6 +5,7 @@ TRAIN:
   EVAL_PERIOD: 5
   CHECKPOINT_PERIOD: 1
   AUTO_RESUME: True
+  TPU_ENABLE: True
 DATA:
   PATH_TO_DATA_DIR: /mnt/disks/persist2/kinetics400/
   NUM_FRAMES: 2

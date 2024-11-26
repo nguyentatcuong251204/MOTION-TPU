@@ -284,7 +284,7 @@ def launch_job(cfg, init_method, func, daemon=False):
             daemonic processes will be created
     """
     if cfg.NUM_GPUS > 1:
-        if cfg.TPU_ENABLE == False:
+        if cfg.TRAIN.TPU_ENABLE == False:
             torch.multiprocessing.spawn(
                 mpu.run,
                 nprocs=cfg.NUM_GPUS,

@@ -270,7 +270,7 @@ def init_distributed_training(cfg):
     """
     if cfg.NUM_GPUS <= 1:
         return
-    elif cfg.TPU_ENABLE == False:
+    elif cfg.TRAIN.TPU_ENABLE == False:
         num_gpus_per_machine = cfg.NUM_GPUS
         num_machines = dist.get_world_size() // num_gpus_per_machine
         for i in range(num_machines):

@@ -36,7 +36,7 @@ def build_model(cfg, gpu_id=None):
     name = cfg.MODEL.MODEL_NAME
     model = MODEL_REGISTRY.get(name)(cfg)
 
-    if cfg.TPU_ENABLE == True:
+    if cfg.TRAIN.TPU_ENABLE == True:
         cur_device = xm.xla_device()
         model.to(device=cur_device)
 

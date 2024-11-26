@@ -44,6 +44,7 @@ _C.TRAIN.ENABLE = True
 # Dataset.
 _C.TRAIN.DATASET = "kinetics"
 
+_C.TRAIN.TPU_ENABLE = False
 ##
 _C.TRAIN.FINETUNE = False
 
