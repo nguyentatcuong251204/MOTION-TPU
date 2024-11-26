@@ -90,8 +90,8 @@ def run_tpu():
             master process.
     """
     # Initialize the process group.
-    world_size = num_proc * num_shards
-    rank = shard_id * num_proc + local_rank
+    # world_size = num_proc * num_shards
+    # rank = shard_id * num_proc + local_rank
 
     try:
         print('torch.distributed try to init_process_group')
