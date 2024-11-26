@@ -74,7 +74,7 @@ def train_epoch(
     # assert False
     logger.info('Start looping for train loader...')
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
-        assert False
+        # assert False
         with xla.step():
             logger.info('Transfer the data to the current GPU device.')
             if cfg.TRAIN.TPU_ENABLE == False:
@@ -360,8 +360,7 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
 
     print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
     print('Create a sampler for multi-process training')
-    sampler = create_sampler(dataset, shuffle, cfg)
-    # sampler = DistributedSampler(dataset, num_replicas=xr.world_size(), rank=xr.global_ordinal()) if xr.world_size() > 1 else None
+    sampler = None #create_sampler(dataset, shuffle, cfg)
     print('Create a loader')
     temp_loader = torch.utils.data.DataLoader(
         dataset,
