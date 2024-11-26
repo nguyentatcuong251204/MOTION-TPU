@@ -26,11 +26,11 @@ import torch_xla as xla
 import torch_xla.core.xla_model as xm
 
 # device = xm.xla_device()
-logger = logging.get_logger(__name__)
+# logger = logging.get_logger(__name__)
 
 
 def train_epoch(
-    train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None, device = 'cpu'
+    train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None, logger=None, device = 'cpu'
 ):
     """
     Perform the video training for one epoch.
@@ -47,7 +47,7 @@ def train_epoch(
             to writer Tensorboard log.
     """
 
-    # Enable train mode.
+    logger.info('Enable train mode.')
     model.train()
     train_meter.iter_tic()
     data_size = len(train_loader)
@@ -56,7 +56,7 @@ def train_epoch(
     num_iters = cfg.GLOBAL_BATCH_SIZE // cur_global_batch_size
 
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
-        # Transfer the data to the current GPU device.
+        logger.info('Transfer the data to the current GPU device.')
         if cfg.TRAIN.TPU_ENABLE == False:
             if isinstance(inputs, (list,)):
                 for i in range(len(inputs)):
@@ -89,13 +89,13 @@ def train_epoch(
             assert False, "Select incorrect NUM_GPUS"
 
 
-        # Update the learning rate.
+        logger.info('Update the learning rate.')
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
         optim.set_lr(optimizer, lr)
 
         train_meter.data_toc()
 
-        # Explicitly declare reduction to mean.
+        logger.info('Explicitly declare reduction to mean.')
         if not cfg.MIXUP.ENABLED:
            loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
         else:
@@ -682,7 +682,7 @@ def _mp_fn(index, cfg):
         # Train for one epoch.
         logger.info("Start train epoch")
         train_epoch(
-            train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer, device
+            train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer, logger, device
         )
         logger.info("End train epoch")
         is_checkp_epoch = cu.is_checkpoint_epoch(
