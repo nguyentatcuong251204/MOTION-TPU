@@ -124,11 +124,12 @@ def construct_loader(cfg, split, is_precise_bn=False):
             sampler=sampler,
             num_workers=cfg.DATA_LOADER.NUM_WORKERS,
             pin_memory=cfg.DATA_LOADER.PIN_MEMORY,
-            drop_last=drop_last,
-            collate_fn=detection_collate if cfg.DETECTION.ENABLE else None,
-            worker_init_fn=utils.loader_worker_init_fn(dataset),
         )
-        loader = pl.MpDeviceLoader(temp_loader, device)
+        loader = pl.MpDeviceLoader(temp_loader, 
+                                   device,
+                                   loader_prefetch_size=128,
+                                   device_prefetch_size=1,
+                                   host_to_device_transfer_threads=4)
     return loader
 
 
