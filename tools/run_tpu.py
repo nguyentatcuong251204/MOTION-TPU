@@ -24,10 +24,13 @@ import timesformer.utils.metrics as metrics
 import timesformer.utils.misc as misc
 import timesformer.visualization.tensorboard_vis as tb
 from timesformer.datasets import loader
-from timesformer.models import build_model
+# from timesformer.models import build_model
 from timesformer.utils.meters import TrainMeter, ValMeter
 from timesformer.utils.multigrid import MultigridSchedule
+from fvcore.common.registry import Registry
+import torch_xla.core.xla_model as xm
 
+MODEL_REGISTRY = Registry("MODEL")
 from timm.data import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 import torch_xla as xla
@@ -343,7 +346,18 @@ def train(cfg):
 
     logger.info("Contruct model...")
     # Build the video model and print model statistics.
-    model = build_model(cfg)
+    name = cfg.MODEL.MODEL_NAME
+    model = MODEL_REGISTRY.get(name)(cfg)
+    model.to(device=device)
+    print('broadcast master param')
+    xm.broadcast_master_param(model)
+    # Use multi-process data parallel model in the multi-gpu setting
+    if cfg.NUM_GPUS > 1 :
+        # Make model replica operate on the current device
+        model = torch.nn.parallel.DistributedDataParallel(
+            module=model, gradient_as_bucket_view=True, broadcast_buffers=False
+        )
+    # model = build_model(cfg)
     # if(cfg.TRAIN.TPU_ENABLE):
     #     print('broadcast_master_param')
     #     xm.broadcast_master_param(model)
