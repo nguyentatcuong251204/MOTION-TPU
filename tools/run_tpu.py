@@ -502,8 +502,8 @@ if __name__ == "__main__":
     # logger.info("LOAD CONFIG")
     cfg = load_config(args)
 
-    logger.info("LOAD TRAIN TEST FUNC")
-    train, test = get_func(cfg)
+    # logger.info("LOAD TRAIN TEST FUNC")
+    # train, test = get_func(cfg)
 
     logger.info("START TRAINING")
     xla.launch(
