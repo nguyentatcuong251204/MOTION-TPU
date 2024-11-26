@@ -638,7 +638,7 @@ def _mp_fn(index, cfg):
 
     # train_meter = TrainMeter(len(train_loader), cfg)
     # val_meter = ValMeter(len(val_loader), cfg)
-
+    train_meter = None
     logger.info("Set up writer...")
     # set up writer for logging to Tensorboard format.
     if cfg.TENSORBOARD.ENABLE and du.is_master_proc(
@@ -678,7 +678,7 @@ def _mp_fn(index, cfg):
 
         # Shuffle the dataset.
         # loader.shuffle_dataset(train_loader, cur_epoch)
-
+        
         # Train for one epoch.
         logger.info("Start train epoch")
         train_epoch(
