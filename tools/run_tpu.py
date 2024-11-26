@@ -58,7 +58,7 @@ def train_epoch(
     logger.info('Turn of Enable .train() mode.')
     # model.train()
     # train_meter.iter_tic()
-    data_size = len(train_loader)
+    # data_size = len(train_loader)
 
     cur_global_batch_size = cfg.NUM_SHARDS * cfg.TRAIN.BATCH_SIZE
     num_iters = cfg.GLOBAL_BATCH_SIZE // cur_global_batch_size
