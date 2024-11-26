@@ -82,7 +82,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
     dataset = build_dataset(dataset_name, cfg, split)
 
     if cfg.MULTIGRID.SHORT_CYCLE and split in ["train"] and not is_precise_bn:
-        # Create a sampler for multi-process training
+        print('Create a sampler for multi-process training MULTIGRID.SHORT_CYCLE')
         sampler = utils.create_sampler(dataset, shuffle, cfg)
         batch_sampler = ShortCycleBatchSampler(
             sampler, batch_size=batch_size, drop_last=drop_last, cfg=cfg
@@ -96,6 +96,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
             worker_init_fn=utils.loader_worker_init_fn(dataset),
         )
     elif cfg.TRAIN.TPU_ENABLE == False:
+        print('Create a sampler for multi-process training')
         # Create a sampler for multi-process training
         sampler = utils.create_sampler(dataset, shuffle, cfg)
         # Create a loader
@@ -111,6 +112,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
             worker_init_fn=utils.loader_worker_init_fn(dataset),
         )
     elif cfg.TRAIN.TPU_ENABLE == True:
+        print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
         device = xm.xla_device()
         # Create a sampler for multi-process training
         sampler = utils.create_sampler(dataset, shuffle, cfg)
