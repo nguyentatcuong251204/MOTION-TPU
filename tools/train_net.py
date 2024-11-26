@@ -451,8 +451,8 @@ def train(cfg):
     # Print config.
     print("Train with config:")
     print(pprint.pformat(cfg))
-    logger.info("Train with config:")
-    logger.info(pprint.pformat(cfg))
+    # logger.info("Train with config:")
+    # logger.info(pprint.pformat(cfg))
 
     # Build the video model and print model statistics.
     model = build_model(cfg)
