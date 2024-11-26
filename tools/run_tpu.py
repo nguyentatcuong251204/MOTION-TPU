@@ -347,7 +347,7 @@ def build_trainer(cfg):
         val_meter,
     )
 
-def _mp_fn(index, cfg):
+def train(cfg):
     """
     Train a video model for many epochs on train set and evaluate it on val set.
     Args:
@@ -460,42 +460,15 @@ def _mp_fn(index, cfg):
         writer.close()
 
 def get_func(cfg):
-    if(cfg.TRAIN.TPU_ENABLE == False):
-        train_func = train
-    else:
-        train_func = _mp_fn
+    train_func = train
     test_func = test
     return train_func, test_func
 
-def main():
-    """
-    Main function to spawn the train and test process.
-    """
-    args = parse_args()
-    if args.num_shards > 1:
-       args.output_dir = str(args.job_dir)
-
-    # logger.info("LOAD CONFIG")
-    cfg = load_config(args)
-
-    logger.info("LOAD TRAIN TEST FUNC")
-    train, test = get_func(cfg)
-
-    logger.info("START TRAINING")
-    # Perform training.
-    if cfg.TRAIN.ENABLE:
-        launch_job(cfg=cfg, init_method=args.init_method, func=train)
-
-    # Perform multi-clip testing.
-    if cfg.TEST.ENABLE:
-        launch_job(cfg=cfg, init_method=args.init_method, func=test)
-
-    # Perform model visualization.
-    if cfg.TENSORBOARD.ENABLE and (
-        cfg.TENSORBOARD.MODEL_VIS.ENABLE
-        or cfg.TENSORBOARD.WRONG_PRED_VIS.ENABLE
-    ):
-        launch_job(cfg=cfg, init_method=args.init_method, func=visualize)
+def _mp_fn(index, cfg):
+  global CFG
+  CFG = cfg
+  torch.set_default_dtype(torch.float32)
+  train()
 
 
 if __name__ == "__main__":
@@ -512,7 +485,7 @@ if __name__ == "__main__":
 
     logger.info("START TRAINING")
     xla.launch(
-                train,
+                _mp_fn,
                 args=(cfg,),
                 debug_single_process=1
             )
