@@ -369,12 +369,12 @@ def construct_loader(cfg, split, device, is_precise_bn=False):
         sampler=sampler,
         num_workers=cfg.DATA_LOADER.NUM_WORKERS,
         persistent_workers=True,
-        prefetch_factor=32,
+        prefetch_factor=4,
     )
     print('Create MpDeviceLoader')
     loader = pl.MpDeviceLoader(temp_loader, 
                                 device,
-                                loader_prefetch_size=128,
+                                loader_prefetch_size=4,
                                 device_prefetch_size=1,
                                 host_to_device_transfer_threads=4)
     
