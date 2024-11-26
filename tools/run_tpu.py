@@ -41,7 +41,10 @@ from torch_xla import runtime as xr
 from timesformer.datasets.build import build_dataset
 # device = xm.xla_device()
 # logger = logging.get_logger(__name__)
-
+import torch_xla.debug.metrics as met
+import torch_xla.distributed.parallel_loader as pl
+import torch_xla.debug.profiler as xp
+import torch_xla.utils.utils as xu
 
 def train_epoch(
     train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None, logger=None, device = 'cpu'
@@ -379,6 +382,18 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
     
     return loader
 
+def construct_fake_loader(cfg, split, device='cpu', is_precise_bn=False):
+    train_dataset_len = 1200000  # Roughly the size of Imagenet dataset.
+    train_loader = xu.SampleGenerator(
+        data=(torch.zeros(16, 3, 224, 224),
+              torch.zeros(16, dtype=torch.int64)),
+        sample_count=train_dataset_len // 16 // xr.world_size())
+    test_loader = xu.SampleGenerator(
+        data=(torch.zeros(16, 3, 224, 224),
+              torch.zeros(16, dtype=torch.int64)),
+        sample_count=50000 // 16 // xr.world_size())
+    return train_loader, test_loader
+    
 def train(cfg):
     """
     Train a video model for many epochs on train set and evaluate it on val set.
@@ -443,15 +458,16 @@ def train(cfg):
 
     logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
-    train_loader = construct_loader(cfg, "train", device)
-    val_loader = construct_loader(cfg, "val", device)
+    # train_loader = construct_loader(cfg, "train", device)
+    # val_loader = construct_loader(cfg, "val", device)
+    train_loader, val_loader = construct_fake_loader
 
-    logger.info("Contruct trainloader precise_bn_loader...")
-    precise_bn_loader = (
-        construct_loader(cfg, "train", is_precise_bn=True)
-        if cfg.BN.USE_PRECISE_STATS
-        else None
-    )
+    # logger.info("Contruct trainloader precise_bn_loader...")
+    # precise_bn_loader = (
+    #     construct_loader(cfg, "train", is_precise_bn=True)
+    #     if cfg.BN.USE_PRECISE_STATS
+    #     else None
+    # )
 
     train_meter = None
     val_meter = None
