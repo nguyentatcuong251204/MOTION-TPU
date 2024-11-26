@@ -48,7 +48,7 @@ import torch_xla.utils.utils as xu
 import torch_xla.distributed.xla_multiprocessing as xmp
 
 def train_epoch(
-    train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None, logger=None, device = 'cpu'
+    train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None, logger=None
 ):
     """
     Perform the video training for one epoch.
@@ -78,23 +78,23 @@ def train_epoch(
         # assert False
         # with xla.step():
         logger.info('Transfer the data to the current GPU device.')
-        if cfg.TRAIN.TPU_ENABLE == False:
-            if isinstance(inputs, (list,)):
-                for i in range(len(inputs)):
-                    inputs[i] = inputs[i].to(device, non_blocking=True)
-            else:
-                inputs = inputs.to(device, non_blocking=True)
-            labels = labels.to(device)
-            for key, val in meta.items():
-                if isinstance(val, (list,)):
-                    for i in range(len(val)):
-                        val[i] = val[i].to(device,non_blocking=True)
-                else:
-                    meta[key] = val.to(device,non_blocking=True)
-        elif cfg.TRAIN.TPU_ENABLE == True:
-            pass
-        else:
-            assert False, "Select incorrect NUM_GPUS"
+        # if cfg.TRAIN.TPU_ENABLE == False:
+        #     if isinstance(inputs, (list,)):
+        #         for i in range(len(inputs)):
+        #             inputs[i] = inputs[i].to(device, non_blocking=True)
+        #     else:
+        #         inputs = inputs.to(device, non_blocking=True)
+        #     labels = labels.to(device)
+        #     for key, val in meta.items():
+        #         if isinstance(val, (list,)):
+        #             for i in range(len(val)):
+        #                 val[i] = val[i].to(device,non_blocking=True)
+        #         else:
+        #             meta[key] = val.to(device,non_blocking=True)
+        # elif cfg.TRAIN.TPU_ENABLE == True:
+        #     pass
+        # else:
+        #     assert False, "Select incorrect NUM_GPUS"
 
 
         logger.info('Update the learning rate.')
@@ -288,29 +288,6 @@ def eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer=None):
     val_meter.reset()
 
 
-def calculate_and_update_precise_bn(loader, model, num_iters=200, use_gpu=True):
-    """
-    Update the stats in bn layers by calculate the precise stats.
-    Args:
-        loader (loader): data loader to provide training data.
-        model (model): model to update the bn stats.
-        num_iters (int): number of iterations to compute and update the bn stats.
-        use_gpu (bool): whether to use GPU or not.
-    """
-
-    def _gen_loader():
-        for inputs, *_ in loader:
-            if use_gpu:
-                if isinstance(inputs, (list,)):
-                    for i in range(len(inputs)):
-                        inputs[i] = inputs[i].to(device,non_blocking=True)
-                else:
-                    inputs = inputs.to(device,non_blocking=True)
-            yield inputs
-
-    # Update the bn stats.
-    update_bn_stats(model, _gen_loader(), num_iters)
-
 def create_sampler(dataset, shuffle, cfg):
     """
     Create sampler for the given dataset.
@@ -424,7 +401,7 @@ def train(cfg):
     logger.info(pprint.pformat(cfg))
 
     logger.info("Contruct model...")
-    model = build_model(cfg).to(device=device)
+    model = build_model(cfg).to(device)
 
     xm.broadcast_master_param(model)
     # Use multi-process data parallel model in the multi-gpu setting
@@ -434,8 +411,8 @@ def train(cfg):
             module=model, gradient_as_bucket_view=True, broadcast_buffers=False
         )
 
-    if du.is_master_proc() and cfg.LOG_MODEL_INFO:
-        misc.log_model_info(model, cfg, use_train_input=True)
+    # if du.is_master_proc() and cfg.LOG_MODEL_INFO:
+    #     misc.log_model_info(model, cfg, use_train_input=True)
 
     # Construct the optimizer.
     optimizer = optim.construct_optimizer(model, cfg)
@@ -449,12 +426,12 @@ def train(cfg):
 
     logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
-    train_loader, val_loader = construct_fake_loader()
+    # train_loader, val_loader = construct_fake_loader()
     
     # print('Create MpDeviceLoader')
-    # train_loader = pl.MpDeviceLoader(train_loader_temp, device)
-    # val_loader = pl.MpDeviceLoader(val_loader_temp, device)
-    
+    train_loader = pl.MpDeviceLoader(train_loader_temp, device)
+    val_loader = pl.MpDeviceLoader(val_loader_temp, device)
+
     # logger.info("Contruct trainloader precise_bn_loader...")
     # precise_bn_loader = (
     #     construct_loader(cfg, "train", is_precise_bn=True)
@@ -480,7 +457,7 @@ def train(cfg):
 
         logger.info("Start train epoch")
         train_epoch(
-            train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer, logger, device
+            train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer, logger
         )
         logger.info("End train epoch")
         is_checkp_epoch = cu.is_checkpoint_epoch(
