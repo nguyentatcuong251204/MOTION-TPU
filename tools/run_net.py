@@ -7,6 +7,8 @@ from timesformer.utils.parser import load_config, parse_args
 from tools.test_net import test
 from tools.train_net import train, _mp_fn
 import torch_xla as xla
+import timesformer.utils.logging as logging
+logger = logging.get_logger(__name__)
 
 def get_func(cfg):
     if(cfg.TRAIN.TPU_ENABLE == False):
@@ -24,13 +26,13 @@ def main():
     if args.num_shards > 1:
        args.output_dir = str(args.job_dir)
 
-    print("LOAD CONFIG in run_net.py")
+    # logger.info("LOAD CONFIG")
     cfg = load_config(args)
 
-    print("LOAD TRAIN TEST FUNC in run_net.py")
+    logger.info("LOAD TRAIN TEST FUNC")
     train, test = get_func(cfg)
 
-    print("START TRAINING in run_net.py")
+    logger.info("START TRAINING")
     # Perform training.
     if cfg.TRAIN.ENABLE:
         launch_job(cfg=cfg, init_method=args.init_method, func=train)

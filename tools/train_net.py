@@ -573,6 +573,7 @@ def _mp_fn(index, cfg):
             slowfast/config/defaults.py
     """
     # Set up environment.
+    logger.info("initialize distributed training...")
     if(cfg.TRAIN.TPU_ENABLE == False):
         du.init_distributed_training(cfg)
     else:
@@ -586,6 +587,7 @@ def _mp_fn(index, cfg):
     # Setup logging format.
     logging.setup_logging(cfg.OUTPUT_DIR)
 
+    logger.info(" Init multigrid....")
     # Init multigrid.
     multigrid = None
     if cfg.MULTIGRID.LONG_CYCLE or cfg.MULTIGRID.SHORT_CYCLE:
@@ -594,11 +596,12 @@ def _mp_fn(index, cfg):
         if cfg.MULTIGRID.LONG_CYCLE:
             cfg, _ = multigrid.update_long_cycle(cfg, cur_epoch=0)
     # Print config.
-    print("Train with config:")
-    print(pprint.pformat(cfg))
-    # logger.info("Train with config:")
-    # logger.info(pprint.pformat(cfg))
+    # print("Train with config:")
+    # print(pprint.pformat(cfg))
+    logger.info("Train with config:")
+    logger.info(pprint.pformat(cfg))
 
+    logger.info("Contruct model...")
     # Build the video model and print model statistics.
     model = build_model(cfg)
     # if(cfg.TRAIN.TPU_ENABLE):
@@ -610,7 +613,7 @@ def _mp_fn(index, cfg):
 
     # Construct the optimizer.
     optimizer = optim.construct_optimizer(model, cfg)
-
+    # logger.info("Contruct model...")
     # Load a checkpoint to resume training if applicable.
     if not cfg.TRAIN.FINETUNE:
       start_epoch = cu.load_train_checkpoint(cfg, model, optimizer)
@@ -618,10 +621,12 @@ def _mp_fn(index, cfg):
       start_epoch = 0
       cu.load_checkpoint(cfg.TRAIN.CHECKPOINT_FILE_PATH, model)
 
+    logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
     train_loader = loader.construct_loader(cfg, "train")
     val_loader = loader.construct_loader(cfg, "val")
 
+    logger.info("Contruct trainloader precise_bn_loader...")
     precise_bn_loader = (
         loader.construct_loader(cfg, "train", is_precise_bn=True)
         if cfg.BN.USE_PRECISE_STATS
@@ -631,6 +636,7 @@ def _mp_fn(index, cfg):
     train_meter = TrainMeter(len(train_loader), cfg)
     val_meter = ValMeter(len(val_loader), cfg)
 
+    logger.info("Set up writer...")
     # set up writer for logging to Tensorboard format.
     if cfg.TENSORBOARD.ENABLE and du.is_master_proc(
         cfg.NUM_GPUS * cfg.NUM_SHARDS
