@@ -66,6 +66,7 @@ def train_epoch(
     logger.info('Start looping for train loader')
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
         with xla.step():
+
             logger.info('Transfer the data to the current GPU device.')
             if cfg.TRAIN.TPU_ENABLE == False:
                 if isinstance(inputs, (list,)):
@@ -92,14 +93,14 @@ def train_epoch(
 
             logger.info('Explicitly declare reduction to mean.')
             if not cfg.MIXUP.ENABLED:
-            loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
+                loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
             else:
-            mixup_fn = Mixup(
-                mixup_alpha=cfg.MIXUP.ALPHA, cutmix_alpha=cfg.MIXUP.CUTMIX_ALPHA, cutmix_minmax=cfg.MIXUP.CUTMIX_MINMAX, prob=cfg.MIXUP.PROB, switch_prob=cfg.MIXUP.SWITCH_PROB, mode=cfg.MIXUP.MODE,
-                label_smoothing=0.1, num_classes=cfg.MODEL.NUM_CLASSES)
-            hard_labels = labels
-            inputs, labels = mixup_fn(inputs, labels)
-            loss_fun = SoftTargetCrossEntropy()
+                mixup_fn = Mixup(
+                    mixup_alpha=cfg.MIXUP.ALPHA, cutmix_alpha=cfg.MIXUP.CUTMIX_ALPHA, cutmix_minmax=cfg.MIXUP.CUTMIX_MINMAX, prob=cfg.MIXUP.PROB, switch_prob=cfg.MIXUP.SWITCH_PROB, mode=cfg.MIXUP.MODE,
+                    label_smoothing=0.1, num_classes=cfg.MODEL.NUM_CLASSES)
+                hard_labels = labels
+                inputs, labels = mixup_fn(inputs, labels)
+                loss_fun = SoftTargetCrossEntropy()
 
             if cfg.DETECTION.ENABLE:
                 preds = model(inputs, meta["boxes"])
