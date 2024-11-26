@@ -30,7 +30,7 @@ logger = logging.get_logger(__name__)
 
 
 def train_epoch(
-    train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None
+    train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None, device = 'cpu'
 ):
     """
     Perform the video training for one epoch.
@@ -46,8 +46,7 @@ def train_epoch(
         writer (TensorboardWriter, optional): TensorboardWriter object
             to writer Tensorboard log.
     """
-    device = xm.xla_device()
-    logger = logging.get_logger(__name__)
+
     # Enable train mode.
     model.train()
     train_meter.iter_tic()
@@ -572,6 +571,10 @@ def _mp_fn(index, cfg):
         cfg (CfgNode): configs. Details can be found in
             slowfast/config/defaults.py
     """
+    logger.info("initialize xm.xla_device()...")
+    device = xm.xla_device()
+    logger = logging.get_logger(__name__)
+
     # Set up environment.
     logger.info("initialize distributed training...")
     if(cfg.TRAIN.TPU_ENABLE == False):
@@ -649,38 +652,39 @@ def _mp_fn(index, cfg):
     logger.info("Start epoch: {}".format(start_epoch + 1))
 
     for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
-        if cfg.MULTIGRID.LONG_CYCLE:
-            cfg, changed = multigrid.update_long_cycle(cfg, cur_epoch)
-            if changed:
-                (
-                    model,
-                    optimizer,
-                    train_loader,
-                    val_loader,
-                    precise_bn_loader,
-                    train_meter,
-                    val_meter,
-                ) = build_trainer(cfg)
+        # if cfg.MULTIGRID.LONG_CYCLE:
+        #     cfg, changed = multigrid.update_long_cycle(cfg, cur_epoch)
+        #     if changed:
+        #         (
+        #             model,
+        #             optimizer,
+        #             train_loader,
+        #             val_loader,
+        #             precise_bn_loader,
+        #             train_meter,
+        #             val_meter,
+        #         ) = build_trainer(cfg)
 
-                # Load checkpoint.
-                if cu.has_checkpoint(cfg.OUTPUT_DIR):
-                    last_checkpoint = cu.get_last_checkpoint(cfg.OUTPUT_DIR)
-                    assert "{:05d}.pyth".format(cur_epoch) in last_checkpoint
-                else:
-                    last_checkpoint = cfg.TRAIN.CHECKPOINT_FILE_PATH
-                logger.info("Load from {}".format(last_checkpoint))
-                cu.load_checkpoint(
-                    last_checkpoint, model, cfg.NUM_GPUS > 1, optimizer
-                )
+        #         # Load checkpoint.
+        #         if cu.has_checkpoint(cfg.OUTPUT_DIR):
+        #             last_checkpoint = cu.get_last_checkpoint(cfg.OUTPUT_DIR)
+        #             assert "{:05d}.pyth".format(cur_epoch) in last_checkpoint
+        #         else:
+        #             last_checkpoint = cfg.TRAIN.CHECKPOINT_FILE_PATH
+        #         logger.info("Load from {}".format(last_checkpoint))
+        #         cu.load_checkpoint(
+        #             last_checkpoint, model, cfg.NUM_GPUS > 1, optimizer
+        #         )
 
         # Shuffle the dataset.
         # loader.shuffle_dataset(train_loader, cur_epoch)
 
         # Train for one epoch.
+        logger.info("Start train epoch")
         train_epoch(
-            train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer
+            train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer, device
         )
-
+        logger.info("End train epoch")
         is_checkp_epoch = cu.is_checkpoint_epoch(
             cfg,
             cur_epoch,
