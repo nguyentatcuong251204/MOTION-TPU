@@ -600,6 +600,10 @@ def _mp_fn(index, cfg):
 
     # Build the video model and print model statistics.
     model = build_model(cfg)
+    if(cfg.TRAIN.TPU_ENABLE):
+        print('broadcast_master_param')
+        xm.broadcast_master_param(model)
+
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
         misc.log_model_info(model, cfg, use_train_input=True)
 
