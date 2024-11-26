@@ -571,9 +571,9 @@ def _mp_fn(index, cfg):
         cfg (CfgNode): configs. Details can be found in
             slowfast/config/defaults.py
     """
+    logger = logging.get_logger(__name__)
     logger.info("initialize xm.xla_device()...")
     device = xm.xla_device()
-    logger = logging.get_logger(__name__)
 
     # Set up environment.
     logger.info("initialize distributed training...")
