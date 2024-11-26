@@ -113,7 +113,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
     elif cfg.TRAIN.TPU_ENABLE == True:
         # device = xm.xla_device()
         # Create a sampler for multi-process training
-        # sampler = utils.create_sampler(dataset, shuffle, cfg)
+        sampler = utils.create_sampler(dataset, shuffle, cfg)
         # Create a loader
         loader = torch.utils.data.DataLoader(
             dataset,
