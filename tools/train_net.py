@@ -75,16 +75,16 @@ def train_epoch(
             with xla.step():
                 if isinstance(inputs, (list,)):
                     for i in range(len(inputs)):
-                        inputs[i] = inputs[i]
+                        inputs[i] = inputs[i].to(device)
                 else:
-                    inputs = inputs
+                    inputs = inputs.to(device)
                 labels = labels.to(device)
                 for key, val in meta.items():
                     if isinstance(val, (list,)):
                         for i in range(len(val)):
-                            val[i] = val[i]
+                            val[i] = val[i].to(device)
                     else:
-                        meta[key] = val
+                        meta[key] = val.to(device)
         else:
             assert False, "Select incorrect NUM_GPUS"
 
@@ -600,9 +600,9 @@ def _mp_fn(index, cfg):
 
     # Build the video model and print model statistics.
     model = build_model(cfg)
-    if(cfg.TRAIN.TPU_ENABLE):
-        print('broadcast_master_param')
-        xm.broadcast_master_param(model)
+    # if(cfg.TRAIN.TPU_ENABLE):
+    #     print('broadcast_master_param')
+    #     xm.broadcast_master_param(model)
 
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
         misc.log_model_info(model, cfg, use_train_input=True)

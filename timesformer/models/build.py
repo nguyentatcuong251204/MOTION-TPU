@@ -39,6 +39,9 @@ def build_model(cfg, gpu_id=None):
     if cfg.TRAIN.TPU_ENABLE == True:
         cur_device = xm.xla_device()
         model.to(device=cur_device)
+        
+        print('broadcast_master_param')
+        xm.broadcast_master_param(model)
 
         # Use multi-process data parallel model in the multi-gpu setting
         if cfg.NUM_GPUS > 1 :
