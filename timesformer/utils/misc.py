@@ -311,7 +311,6 @@ def launch_job(cfg, init_method, func, daemon=False):
                     cfg.DIST_BACKEND,
                     cfg,
                 ),
-                daemon=daemon,
             )
     else:
         func(cfg=cfg)
