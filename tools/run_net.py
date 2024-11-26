@@ -62,5 +62,6 @@ if __name__ == "__main__":
         # launch_job(cfg=cfg, init_method=args.init_method, func=train)
         xla.launch(
                     train,
+                    args=(cfg),
                     debug_single_process=1
                 )
