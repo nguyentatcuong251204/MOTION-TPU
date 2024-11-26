@@ -303,6 +303,7 @@ def launch_job(cfg, init_method, func, daemon=False):
             # mpu.run_tpu()
             xla.launch(
                 func,
+                args=(cfg,),
                 debug_single_process=1
             )
     else:
