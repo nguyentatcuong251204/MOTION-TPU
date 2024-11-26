@@ -449,11 +449,12 @@ def train(cfg):
 
     logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
-    # train_loader, val_loader = construct_fake_loader()
+    train_loader, val_loader = construct_fake_loader()
     
-    print('Create MpDeviceLoader')
-    train_loader = pl.MpDeviceLoader(train_loader_temp, device)
-    val_loader = pl.MpDeviceLoader(val_loader_temp, device)
+    # print('Create MpDeviceLoader')
+    # train_loader = pl.MpDeviceLoader(train_loader_temp, device)
+    # val_loader = pl.MpDeviceLoader(val_loader_temp, device)
+    
     # logger.info("Contruct trainloader precise_bn_loader...")
     # precise_bn_loader = (
     #     construct_loader(cfg, "train", is_precise_bn=True)
@@ -529,4 +530,5 @@ if __name__ == "__main__":
     xla.launch(
                 _mp_fn,
                 args=(cfg,),
+                debug_single_process=1
             )
