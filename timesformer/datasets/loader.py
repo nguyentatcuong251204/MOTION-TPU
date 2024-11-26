@@ -114,9 +114,9 @@ def construct_loader(cfg, split, is_precise_bn=False):
     elif cfg.TRAIN.TPU_ENABLE == True:
         print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
         device = xm.xla_device()
-        # Create a sampler for multi-process training
+        print('Create a sampler for multi-process training')
         sampler = utils.create_sampler(dataset, shuffle, cfg)
-        # Create a loader
+        print('Create a loader')
         temp_loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size,
@@ -125,6 +125,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
             num_workers=cfg.DATA_LOADER.NUM_WORKERS,
             pin_memory=cfg.DATA_LOADER.PIN_MEMORY,
         )
+        print('Create MpDeviceLoader')
         loader = pl.MpDeviceLoader(temp_loader, 
                                    device,
                                    loader_prefetch_size=128,
