@@ -382,7 +382,7 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
     
     return loader
 
-def construct_fake_loader(cfg, split, device='cpu', is_precise_bn=False):
+def construct_fake_loader():
     train_dataset_len = 1200000  # Roughly the size of Imagenet dataset.
     train_loader = xu.SampleGenerator(
         data=(torch.zeros(16, 3, 224, 224),
