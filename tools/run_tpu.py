@@ -465,10 +465,10 @@ def get_func(cfg):
     return train_func, test_func
 
 def _mp_fn(index, cfg):
-  global CFG
-  CFG = cfg
-  torch.set_default_dtype(torch.float32)
-  train()
+    global CFG
+    CFG = cfg
+    torch.set_default_dtype(torch.float32)
+    train()
 
 
 if __name__ == "__main__":
