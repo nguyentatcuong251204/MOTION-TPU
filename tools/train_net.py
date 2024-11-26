@@ -47,8 +47,8 @@ def train_epoch(
             to writer Tensorboard log.
     """
 
-    logger.info('Enable train mode.')
-    model.train()
+    logger.info('Turn of Enable .train() mode.')
+    # model.train()
     train_meter.iter_tic()
     data_size = len(train_loader)
 
