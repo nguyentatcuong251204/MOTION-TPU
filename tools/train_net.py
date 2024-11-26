@@ -564,7 +564,7 @@ def train(cfg):
     if writer is not None:
         writer.close()
 
-def _mp_fn(cfg):
+def _mp_fn(index, cfg):
     """
     Train a video model for many epochs on train set and evaluate it on val set.
     Args:
