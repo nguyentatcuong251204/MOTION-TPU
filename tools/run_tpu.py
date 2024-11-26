@@ -76,84 +76,73 @@ def train_epoch(
     logger.info('Start looping for train loader...')
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
         # assert False
-        # with xla.step():
-        logger.info('Transfer the data to the current GPU device.')
-        # if cfg.TRAIN.TPU_ENABLE == False:
-        #     if isinstance(inputs, (list,)):
-        #         for i in range(len(inputs)):
-        #             inputs[i] = inputs[i].to(device, non_blocking=True)
-        #     else:
-        #         inputs = inputs.to(device, non_blocking=True)
-        #     labels = labels.to(device)
-        #     for key, val in meta.items():
-        #         if isinstance(val, (list,)):
-        #             for i in range(len(val)):
-        #                 val[i] = val[i].to(device,non_blocking=True)
-        #         else:
-        #             meta[key] = val.to(device,non_blocking=True)
-        # elif cfg.TRAIN.TPU_ENABLE == True:
-        #     pass
-        # else:
-        #     assert False, "Select incorrect NUM_GPUS"
+        with xp.StepTrace('train_kinetic', step_num=cur_iter):
+            logger.info('Transfer the data to the current GPU device.')
+            # if cfg.TRAIN.TPU_ENABLE == False:
+            #     if isinstance(inputs, (list,)):
+            #         for i in range(len(inputs)):
+            #             inputs[i] = inputs[i].to(device, non_blocking=True)
+            #     else:
+            #         inputs = inputs.to(device, non_blocking=True)
+            #     labels = labels.to(device)
+            #     for key, val in meta.items():
+            #         if isinstance(val, (list,)):
+            #             for i in range(len(val)):
+            #                 val[i] = val[i].to(device,non_blocking=True)
+            #         else:
+            #             meta[key] = val.to(device,non_blocking=True)
+            # elif cfg.TRAIN.TPU_ENABLE == True:
+            #     pass
+            # else:
+            #     assert False, "Select incorrect NUM_GPUS"
 
 
-        logger.info('Update the learning rate.')
-        lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
-        optim.set_lr(optimizer, lr)
+            logger.info('Update the learning rate.')
+            lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
+            optim.set_lr(optimizer, lr)
 
-        logger.info('Explicitly declare reduction to mean.')
-        if not cfg.MIXUP.ENABLED:
-            loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
-        else:
-            mixup_fn = Mixup(
-                mixup_alpha=cfg.MIXUP.ALPHA, cutmix_alpha=cfg.MIXUP.CUTMIX_ALPHA, cutmix_minmax=cfg.MIXUP.CUTMIX_MINMAX, prob=cfg.MIXUP.PROB, switch_prob=cfg.MIXUP.SWITCH_PROB, mode=cfg.MIXUP.MODE,
-                label_smoothing=0.1, num_classes=cfg.MODEL.NUM_CLASSES)
-            hard_labels = labels
-            inputs, labels = mixup_fn(inputs, labels)
-            loss_fun = SoftTargetCrossEntropy()
-
-        if cfg.DETECTION.ENABLE:
-            preds = model(inputs, meta["boxes"])
-        else:
-            preds = model(inputs)
-
-        logger.info('Compute the loss.')
-        loss = loss_fun(preds, labels)
-
-        if cfg.MIXUP.ENABLED:
-            labels = hard_labels
-
-        # check Nan Loss.
-        misc.check_nan_losses(loss)
-
-
-        if cur_global_batch_size >= cfg.GLOBAL_BATCH_SIZE:
-            if cfg.TRAIN.TPU_ENABLE == False:
-            # Perform the backward pass.
-                optimizer.zero_grad()
-                loss.backward()
-                # Update the parameters.
-                optimizer.step()
+            logger.info('Explicitly declare reduction to mean.')
+            if not cfg.MIXUP.ENABLED:
+                loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
             else:
-            # Perform the backward pass.
-                with xla.step():
+                mixup_fn = Mixup(
+                    mixup_alpha=cfg.MIXUP.ALPHA, cutmix_alpha=cfg.MIXUP.CUTMIX_ALPHA, cutmix_minmax=cfg.MIXUP.CUTMIX_MINMAX, prob=cfg.MIXUP.PROB, switch_prob=cfg.MIXUP.SWITCH_PROB, mode=cfg.MIXUP.MODE,
+                    label_smoothing=0.1, num_classes=cfg.MODEL.NUM_CLASSES)
+                hard_labels = labels
+                inputs, labels = mixup_fn(inputs, labels)
+                loss_fun = SoftTargetCrossEntropy()
+
+            if cfg.DETECTION.ENABLE:
+                preds = model(inputs, meta["boxes"])
+            else:
+                preds = model(inputs)
+
+            logger.info('Compute the loss.')
+            loss = loss_fun(preds, labels)
+
+            if cfg.MIXUP.ENABLED:
+                labels = hard_labels
+
+            # check Nan Loss.
+            misc.check_nan_losses(loss)
+
+
+            if cur_global_batch_size >= cfg.GLOBAL_BATCH_SIZE:
+                if cfg.TRAIN.TPU_ENABLE == False:
+                # Perform the backward pass.
                     optimizer.zero_grad()
                     loss.backward()
                     # Update the parameters.
-                    xm.optimizer_step(optimizer)
-        else:
-            if cfg.TRAIN.TPU_ENABLE == False:
-                if cur_iter == 0:
-                    optimizer.zero_grad()
-                loss.backward()
-                if (cur_iter + 1) % num_iters == 0:
-                    for p in model.parameters():
-                        if(p.grad is not None):
-                            p.grad /= num_iters
                     optimizer.step()
-                    optimizer.zero_grad()
+                else:
+                # Perform the backward pass.
+                    with xla.step():
+                        optimizer.zero_grad()
+                        loss.backward()
+                        # Update the parameters.
+                        xm.optimizer_step(optimizer)
             else:
-                with xla.step():
+                if cfg.TRAIN.TPU_ENABLE == False:
                     if cur_iter == 0:
                         optimizer.zero_grad()
                     loss.backward()
@@ -161,45 +150,56 @@ def train_epoch(
                         for p in model.parameters():
                             if(p.grad is not None):
                                 p.grad /= num_iters
-                        # optimizer.step()
-                        xm.optimizer_step(optimizer)
+                        optimizer.step()
                         optimizer.zero_grad()
+                else:
+                    with xla.step():
+                        if cur_iter == 0:
+                            optimizer.zero_grad()
+                        loss.backward()
+                        if (cur_iter + 1) % num_iters == 0:
+                            for p in model.parameters():
+                                if(p.grad is not None):
+                                    p.grad /= num_iters
+                            # optimizer.step()
+                            xm.optimizer_step(optimizer)
+                            optimizer.zero_grad()
 
-        top1_err, top5_err = None, None
-        if cfg.DATA.MULTI_LABEL:
-            # Gather all the predictions across all the devices.
-            if cfg.NUM_GPUS > 1:
-                [loss] = du.all_reduce([loss])
-            loss = loss.item()
-        else:
-            # Compute the errors.
-            num_topks_correct = metrics.topks_correct(preds, labels, (1, 5))
-            top1_err, top5_err = [
-                (1.0 - x / preds.size(0)) * 100.0 for x in num_topks_correct
-            ]
-            # Gather all the predictions across all the devices.
-            if cfg.NUM_GPUS > 1:
-                loss, top1_err, top5_err = du.all_reduce(
-                    [loss, top1_err, top5_err]
+            top1_err, top5_err = None, None
+            if cfg.DATA.MULTI_LABEL:
+                # Gather all the predictions across all the devices.
+                if cfg.NUM_GPUS > 1:
+                    [loss] = du.all_reduce([loss])
+                loss = loss.item()
+            else:
+                # Compute the errors.
+                num_topks_correct = metrics.topks_correct(preds, labels, (1, 5))
+                top1_err, top5_err = [
+                    (1.0 - x / preds.size(0)) * 100.0 for x in num_topks_correct
+                ]
+                # Gather all the predictions across all the devices.
+                if cfg.NUM_GPUS > 1:
+                    loss, top1_err, top5_err = du.all_reduce(
+                        [loss, top1_err, top5_err]
+                    )
+
+                # Copy the stats from GPU to CPU (sync point).
+                loss, top1_err, top5_err = (
+                    loss.item(),
+                    top1_err.item(),
+                    top5_err.item(),
                 )
 
-            # Copy the stats from GPU to CPU (sync point).
-            loss, top1_err, top5_err = (
-                loss.item(),
-                top1_err.item(),
-                top5_err.item(),
-            )
-
-            if writer is not None:
-                writer.add_scalars(
-                    {
-                        "Train/loss": loss,
-                        "Train/lr": lr,
-                        "Train/Top1_err": top1_err,
-                        "Train/Top5_err": top5_err,
-                    },
-                    global_step=data_size * cur_epoch + cur_iter,
-                )
+                if writer is not None:
+                    writer.add_scalars(
+                        {
+                            "Train/loss": loss,
+                            "Train/lr": lr,
+                            "Train/Top1_err": top1_err,
+                            "Train/Top5_err": top5_err,
+                        },
+                        global_step=data_size * cur_epoch + cur_iter,
+                    )
 
         # xm.mark_step()
 
