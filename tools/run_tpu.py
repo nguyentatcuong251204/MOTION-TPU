@@ -385,6 +385,8 @@ def train(cfg):
     train_loader_temp = construct_loader(cfg, "train")
     val_loader_temp = construct_loader(cfg, "val")
 
+    print(train_loader_temp[1])
+
     torch.manual_seed(42)
 
     # Set random seed from configs.
