@@ -72,19 +72,20 @@ def train_epoch(
                 else:
                     meta[key] = val.to(device,non_blocking=True)
         elif cfg.TRAIN.TPU_ENABLE == True:
-            with xla.step():
-                if isinstance(inputs, (list,)):
-                    for i in range(len(inputs)):
-                        inputs[i] = inputs[i].to(device)
-                else:
-                    inputs = inputs.to(device)
-                labels = labels.to(device)
-                for key, val in meta.items():
-                    if isinstance(val, (list,)):
-                        for i in range(len(val)):
-                            val[i] = val[i].to(device)
-                    else:
-                        meta[key] = val.to(device)
+            # with xla.step():
+            #     if isinstance(inputs, (list,)):
+            #         for i in range(len(inputs)):
+            #             inputs[i] = inputs[i].to(device)
+            #     else:
+            #         inputs = inputs.to(device)
+            #     labels = labels.to(device)
+            #     for key, val in meta.items():
+            #         if isinstance(val, (list,)):
+            #             for i in range(len(val)):
+            #                 val[i] = val[i].to(device)
+            #         else:
+            #             meta[key] = val.to(device)
+            pass
         else:
             assert False, "Select incorrect NUM_GPUS"
 
