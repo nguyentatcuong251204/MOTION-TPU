@@ -140,9 +140,9 @@ def train_epoch(
                 for p in model.parameters():
                     if(p.grad is not None):
                         p.grad /= num_iters
-                # optimizer.step()
-                xm.optimizer_step(optimizer)
-                optimizer.zero_grad()
+                    # optimizer.step()
+                    xm.optimizer_step(optimizer)
+                    optimizer.zero_grad()
 
         top1_err, top5_err = None, None
         if cfg.DATA.MULTI_LABEL:
@@ -317,7 +317,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
     # print(dataset[1], dataset[1][0].shape, len(dataset[1]), len(dataset), xr.world_size())
     # print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
     # print('Create a sampler for multi-process training')
-    sampler = create_sampler(dataset[:19872], shuffle, cfg)
+    sampler = create_sampler(dataset[:16384], shuffle, cfg)
     # print('Create a loader')
     loader = torch.utils.data.DataLoader(
         dataset,
