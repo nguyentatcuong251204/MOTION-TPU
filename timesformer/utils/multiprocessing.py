@@ -106,8 +106,7 @@ def run_tpu(
     try:
         dist.init_process_group(
             "xla", 
-            init_method='xla://',
-            backend=backend)
+            init_method='xla://')
     except Exception as e:
         raise e
 
