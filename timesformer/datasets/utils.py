@@ -370,7 +370,7 @@ def create_sampler(dataset, shuffle, cfg):
     if(cfg.TRAIN.TPU_ENABLE == False):
         sampler = DistributedSampler(dataset) if cfg.NUM_GPUS > 1 else None
     else:
-        sampler = DistributedSampler(dataset, num_replicas=xr.world_size(), rank=xr.global_ordinal(),) if cfg.NUM_GPUS > 1 else None
+        sampler = DistributedSampler(dataset, num_replicas=xr.world_size(), rank=xr.global_ordinal()) if cfg.NUM_GPUS > 1 else None
 
     return sampler
 
