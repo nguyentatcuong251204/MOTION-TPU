@@ -4,7 +4,7 @@
 
 import torch
 from fvcore.common.registry import Registry
-import torch_xla.core.xla_model as xm
+# import torch_xla.core.xla_model as xm
 
 MODEL_REGISTRY = Registry("MODEL")
 MODEL_REGISTRY.__doc__ = """
@@ -15,7 +15,7 @@ The call should return a `torch.nn.Module` object.
 """
 
 
-def build_model(cfg, device='cpu', gpu_id=None):
+def build_model(cfg, gpu_id=None):
     """
     Builds the video model.
     Args:
@@ -38,6 +38,7 @@ def build_model(cfg, device='cpu', gpu_id=None):
 
     if cfg.TRAIN.TPU_ENABLE == True:
         # cur_device = xm.xla_device()
+        return model
         model.to(device=device)
         
         print('broadcast master param')

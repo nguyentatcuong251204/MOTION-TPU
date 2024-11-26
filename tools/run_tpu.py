@@ -29,6 +29,7 @@ from timesformer.utils.meters import TrainMeter, ValMeter
 from timesformer.utils.multigrid import MultigridSchedule
 # from fvcore.common.registry import Registry
 # import torch_xla.core.xla_model as xm
+from torch.utils.data.distributed import DistributedSampler
 from torch_xla import runtime as xr
 import torch_xla.distributed.parallel_loader as pl
 # MODEL_REGISTRY = Registry("MODEL")
@@ -37,6 +38,7 @@ from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
 import torch_xla as xla
 import torch_xla.core.xla_model as xm
 from torch_xla import runtime as xr
+from timesformer.datasets.build import build_dataset
 # device = xm.xla_device()
 # logger = logging.get_logger(__name__)
 
@@ -305,6 +307,77 @@ def calculate_and_update_precise_bn(loader, model, num_iters=200, use_gpu=True):
     # Update the bn stats.
     update_bn_stats(model, _gen_loader(), num_iters)
 
+def create_sampler(dataset, shuffle, cfg):
+    """
+    Create sampler for the given dataset.
+    Args:
+        dataset (torch.utils.data.Dataset): the given dataset.
+        shuffle (bool): set to ``True`` to have the data reshuffled
+            at every epoch.
+        cfg (CfgNode): configs. Details can be found in
+            slowfast/config/defaults.py
+    Returns:
+        sampler (Sampler): the created sampler.
+    """
+    if(cfg.TRAIN.TPU_ENABLE == False):
+        sampler = DistributedSampler(dataset) if cfg.NUM_GPUS > 1 else None
+    else:
+        sampler = DistributedSampler(dataset, num_replicas=xr.world_size(), rank=xr.global_ordinal()) if xr.world_size() > 1 else None
+
+    return sampler
+
+def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
+    """
+    Constructs the data loader for the given dataset.
+    Args:
+        cfg (CfgNode): configs. Details can be found in
+            slowfast/config/defaults.py
+        split (str): the split of the data loader. Options include `train`,
+            `val`, and `test`.
+    """
+    assert split in ["train", "val", "test"]
+    if split in ["train"]:
+        dataset_name = cfg.TRAIN.DATASET
+        batch_size = int(cfg.TRAIN.BATCH_SIZE / max(1, cfg.NUM_GPUS))
+        shuffle = True
+        drop_last = True
+    elif split in ["val"]:
+        dataset_name = cfg.TRAIN.DATASET
+        batch_size = int(cfg.TRAIN.BATCH_SIZE / max(1, cfg.NUM_GPUS))
+        shuffle = False
+        drop_last = False
+    elif split in ["test"]:
+        dataset_name = cfg.TEST.DATASET
+        batch_size = int(cfg.TEST.BATCH_SIZE / max(1, cfg.NUM_GPUS))
+        shuffle = False
+        drop_last = False
+
+    # Construct the dataset
+    dataset = build_dataset(dataset_name, cfg, split)
+
+    print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
+    print('Create a sampler for multi-process training')
+    sampler = create_sampler(dataset, shuffle, cfg)
+    # sampler = DistributedSampler(dataset, num_replicas=xr.world_size(), rank=xr.global_ordinal()) if xr.world_size() > 1 else None
+    print('Create a loader')
+    temp_loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=(False if sampler else shuffle),
+        sampler=sampler,
+        num_workers=cfg.DATA_LOADER.NUM_WORKERS,
+        pin_memory=cfg.DATA_LOADER.PIN_MEMORY,
+        persistent_workers=True,
+        prefetch_factor=32,
+    )
+    print('Create MpDeviceLoader')
+    loader = pl.MpDeviceLoader(temp_loader, 
+                                device,
+                                loader_prefetch_size=128,
+                                device_prefetch_size=1,
+                                host_to_device_transfer_threads=4)
+    
+    return loader
 
 def train(cfg):
     """
@@ -344,8 +417,16 @@ def train(cfg):
     logger.info(pprint.pformat(cfg))
 
     logger.info("Contruct model...")
-
-    model = build_model(cfg, device=device)
+    model = build_model(cfg)
+    model.to(device=device)
+    print('broadcast master param')
+    xm.broadcast_master_param(model)
+    # Use multi-process data parallel model in the multi-gpu setting
+    if cfg.NUM_GPUS > 1 :
+        # Make model replica operate on the current device
+        model = torch.nn.parallel.DistributedDataParallel(
+            module=model, gradient_as_bucket_view=True
+        )
 
     if du.is_master_proc() and cfg.LOG_MODEL_INFO:
         misc.log_model_info(model, cfg, use_train_input=True)
@@ -362,12 +443,12 @@ def train(cfg):
 
     logger.info("Contruct dataloader...")
     # Create the video train and val loaders.
-    train_loader = loader.construct_loader(cfg, "train", device)
-    val_loader = loader.construct_loader(cfg, "val", device)
+    train_loader = construct_loader(cfg, "train", device)
+    val_loader = construct_loader(cfg, "val", device)
 
     logger.info("Contruct trainloader precise_bn_loader...")
     precise_bn_loader = (
-        loader.construct_loader(cfg, "train", is_precise_bn=True)
+        construct_loader(cfg, "train", is_precise_bn=True)
         if cfg.BN.USE_PRECISE_STATS
         else None
     )
