@@ -88,7 +88,7 @@ class Kinetics(torch.utils.data.Dataset):
         logger.info("Read Kinetics data from files ...")
         with PathManager.open(path_to_file, "r") as f:
             for clip_idx, path_label in enumerate(f.read().splitlines()):
-                # print('path_label', path_label, path_label.split(self.cfg.DATA.PATH_LABEL_SEPARATOR), self.cfg.DATA.PATH_LABEL_SEPARATOR)
+                print('path_label', path_label, path_label.split(self.cfg.DATA.PATH_LABEL_SEPARATOR), self.cfg.DATA.PATH_LABEL_SEPARATOR)
                 assert (
                     len(path_label.split(self.cfg.DATA.PATH_LABEL_SEPARATOR))
                     == 2
