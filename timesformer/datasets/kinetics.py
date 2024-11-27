@@ -207,6 +207,7 @@ class Kinetics(torch.utils.data.Dataset):
                         self._path_to_videos[index], e
                     )
                 )
+            logger.info(video_container)
             # Select a random video if the current video was not able to access.
             if video_container is None:
                 # logger.warning(
