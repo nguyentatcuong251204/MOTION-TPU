@@ -19,13 +19,13 @@ def get_video_container(path_to_vid, multi_thread_decode=False, backend="pyav"):
             container = fp.read()
         return container
     elif backend == "pyav":
-        #try:
-        container = av.open(path_to_vid)
-        if multi_thread_decode:
-            # Enable multiple threads for decoding.
-            container.streams.video[0].thread_type = "AUTO"
-        #except:
-        #  container = None
+        try:
+            container = av.open(path_to_vid)
+            if multi_thread_decode:
+                # Enable multiple threads for decoding.
+                container.streams.video[0].thread_type = "AUTO"
+        except:
+            container = None
         return container
     else:
         raise NotImplementedError("Unknown backend {}".format(backend))
