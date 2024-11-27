@@ -421,7 +421,7 @@ def train(cfg):
 
     train_meter = None
     val_meter = None
-    logger.info("Set up writer...")
+    # logger.info("Set up writer...")
     # set up writer for logging to Tensorboard format.
     if cfg.TENSORBOARD.ENABLE and du.is_master_proc(
         cfg.NUM_GPUS * cfg.NUM_SHARDS
