@@ -313,11 +313,11 @@ def construct_loader(cfg, split, is_precise_bn=False):
         drop_last = False
 
     # Construct the dataset
-    dataset = build_dataset(dataset_name, cfg, split)
+    dataset = build_dataset(dataset_name, cfg, split)[:16384]
     # print(dataset[1], dataset[1][0].shape, len(dataset[1]), len(dataset), xr.world_size())
     # print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
     # print('Create a sampler for multi-process training')
-    sampler = create_sampler(dataset[:16384], shuffle, cfg)
+    sampler = create_sampler(dataset, shuffle, cfg)
     # print('Create a loader')
     loader = torch.utils.data.DataLoader(
         dataset,
