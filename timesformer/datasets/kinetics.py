@@ -207,17 +207,17 @@ class Kinetics(torch.utils.data.Dataset):
                         self._path_to_videos[index], e
                     )
                 )
-            logger.info(video_container)
+            # logger.info(video_container)
             # Select a random video if the current video was not able to access.
             if video_container is None:
-                # logger.warning(
-                #     "Failed to meta load video idx {} from {}; trial {}".format(
-                #         index, self._path_to_videos[index], i_try
-                #     )
-                # )
                 logger.warning(
-                    "Failed to meta load video idx"
+                    "Failed to meta load video idx {} from {}; trial {}".format(
+                        index, self._path_to_videos[index], i_try
+                    )
                 )
+                # logger.warning(
+                #     "Failed to meta load video idx"
+                # )
                 if self.mode not in ["test"] and i_try > self._num_retries // 2:
                     # let's try another one
                     index = random.randint(0, len(self._path_to_videos) - 1)
