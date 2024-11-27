@@ -443,10 +443,10 @@ def train(cfg):
         is_checkp_epoch = cu.is_checkpoint_epoch(
             cfg,
             cur_epoch,
-            None if multigrid is None else multigrid.schedule,
+            None,
         )
         is_eval_epoch = misc.is_eval_epoch(
-            cfg, cur_epoch, None if multigrid is None else multigrid.schedule
+            cfg, cur_epoch, None
         )
 
         # Save a checkpoint.
