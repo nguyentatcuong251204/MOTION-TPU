@@ -216,21 +216,10 @@ class Kinetics(torch.utils.data.Dataset):
                 #         index, self._path_to_videos[index], i_try
                 #     )
                 # )
-                logger.warning(
-                    "Failed to meta load video idx {}; trial {}".format(
-                        index, i_try
-                    )
-                )
                 if self.mode not in ["test"] and i_try > self._num_retries // 2:
                     # let's try another one
                     index = random.randint(0, len(self._path_to_videos) - 1)
                 continue
-            # else:
-            #     logger.warning(
-            #         "Success to meta load video idx {}; trial {}".format(
-            #             index, i_try
-            #         )
-            #     )
 
             # Decode video. Meta info is used to perform selective decoding.
             frames = decoder.decode(
