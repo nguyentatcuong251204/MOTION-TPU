@@ -435,11 +435,11 @@ def train(cfg):
 
     for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
 
-        logger.info("Start train epoch")
+        # logger.info("Start train epoch")
         train_epoch(
             train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer, logger
         )
-        logger.info("End train epoch")
+        # logger.info("End train epoch")
         is_checkp_epoch = cu.is_checkpoint_epoch(
             cfg,
             cur_epoch,
@@ -501,5 +501,5 @@ if __name__ == "__main__":
     xla.launch(
                 _mp_fn,
                 args=(cfg,),
-                debug_single_process=0
+                debug_single_process=True
             )
