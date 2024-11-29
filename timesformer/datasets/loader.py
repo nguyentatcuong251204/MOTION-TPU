@@ -112,13 +112,14 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
             worker_init_fn=utils.loader_worker_init_fn(dataset),
         )
     elif cfg.TRAIN.TPU_ENABLE == True:
+        assert False, "Code should not go here here"
         # print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
         # device = xm.xla_device()
         # print('Create a sampler for multi-process training')
         sampler = utils.create_sampler(dataset, shuffle, cfg)
         # sampler = DistributedSampler(dataset, num_replicas=xr.world_size(), rank=xr.global_ordinal()) if xr.world_size() > 1 else None
         # print('Create a loader')
-        temp_loader = torch.utils.data.DataLoader(
+        loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size,
             shuffle=(False if sampler else shuffle),
@@ -129,11 +130,11 @@ def construct_loader(cfg, split, device='cpu', is_precise_bn=False):
             prefetch_factor=32,
         )
         # print('Create MpDeviceLoader')
-        loader = pl.MpDeviceLoader(temp_loader, 
-                                   device,
-                                   loader_prefetch_size=128,
-                                   device_prefetch_size=1,
-                                   host_to_device_transfer_threads=4)
+        # loader = pl.MpDeviceLoader(temp_loader, 
+        #                            device,
+        #                            loader_prefetch_size=128,
+        #                            device_prefetch_size=1,
+        #                            host_to_device_transfer_threads=4)
     return loader
 
 
