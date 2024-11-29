@@ -423,12 +423,12 @@ def train(cfg):
     val_meter = None
     # logger.info("Set up writer...")
     # set up writer for logging to Tensorboard format.
-    if cfg.TENSORBOARD.ENABLE and du.is_master_proc(
-        cfg.NUM_GPUS * cfg.NUM_SHARDS
-    ):
-        writer = tb.TensorboardWriter(cfg)
-    else:
-        writer = None
+    # if cfg.TENSORBOARD.ENABLE and du.is_master_proc(
+    #     cfg.NUM_GPUS * cfg.NUM_SHARDS
+    # ):
+    writer = tb.TensorboardWriter(cfg)
+    # else:
+    #     writer = None
 
     # Perform the training loop.
     logger.info("Start epoch: {}".format(start_epoch + 1))
