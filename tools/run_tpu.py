@@ -391,8 +391,8 @@ def train(cfg):
             module=model, gradient_as_bucket_view=True, broadcast_buffers=False
         )
 
-    # if du.is_master_proc() and cfg.LOG_MODEL_INFO:
-    #     misc.log_model_info(model, cfg, use_train_input=True)
+    if du.is_master_proc() and cfg.LOG_MODEL_INFO:
+        misc.log_model_info(model, cfg, use_train_input=True)
 
     # Construct the optimizer.
     optimizer = optim.construct_optimizer(model, cfg)
@@ -412,12 +412,12 @@ def train(cfg):
     train_loader = pl.MpDeviceLoader(train_loader_temp, device)
     val_loader = pl.MpDeviceLoader(val_loader_temp, device)
 
-    # logger.info("Contruct trainloader precise_bn_loader...")
-    # precise_bn_loader = (
-    #     construct_loader(cfg, "train", is_precise_bn=True)
-    #     if cfg.BN.USE_PRECISE_STATS
-    #     else None
-    # )
+    logger.info("Contruct trainloader precise_bn_loader...")
+    precise_bn_loader = (
+        construct_loader(cfg, "train", is_precise_bn=True)
+        if cfg.BN.USE_PRECISE_STATS
+        else None
+    )
 
     train_meter = None
     val_meter = None
@@ -448,6 +448,20 @@ def train(cfg):
         is_eval_epoch = misc.is_eval_epoch(
             cfg, cur_epoch, None
         )
+
+        # Compute precise BN stats.
+        if (
+            (is_checkp_epoch or is_eval_epoch)
+            and cfg.BN.USE_PRECISE_STATS
+            and len(get_bn_modules(model)) > 0
+        ):
+            calculate_and_update_precise_bn(
+                precise_bn_loader,
+                model,
+                min(cfg.BN.NUM_BATCHES_PRECISE, len(precise_bn_loader)),
+                cfg.NUM_GPUS > 0,
+            )
+        _ = misc.aggregate_sub_bn_stats(model)
 
         # Save a checkpoint.
         if is_checkp_epoch:
