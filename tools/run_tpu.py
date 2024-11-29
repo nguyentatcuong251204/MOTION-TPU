@@ -501,5 +501,5 @@ if __name__ == "__main__":
     xla.launch(
                 _mp_fn,
                 args=(cfg,),
-                debug_single_process=0
+                debug_single_process=False
             )
