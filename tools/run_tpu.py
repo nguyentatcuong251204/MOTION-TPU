@@ -67,7 +67,7 @@ def train_epoch(
 
     logger.info('Turn of Enable .train() mode.')
     # model.train()
-    # train_meter.iter_tic()
+    train_meter.iter_tic()
     data_size = len(train_loader)
     # print('data_size', data_size)
     cur_global_batch_size = cfg.NUM_SHARDS * cfg.TRAIN.BATCH_SIZE
@@ -100,6 +100,8 @@ def train_epoch(
         # logger.info('Update the learning rate.')
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
         optim.set_lr(optimizer, lr)
+
+        train_meter.data_toc()
 
         # logger.info('Explicitly declare reduction to mean.')
         if not cfg.MIXUP.ENABLED:
@@ -169,6 +171,18 @@ def train_epoch(
                 top5_err.item(),
             )
 
+            # Update and log stats.
+            train_meter.update_stats(
+                top1_err,
+                top5_err,
+                loss,
+                lr,
+                inputs[0].size(0)
+                * max(
+                    cfg.NUM_GPUS, 1
+                ),  # If running  on CPU (cfg.NUM_GPUS == 1), use 1 to represent 1 CPU.
+            )
+
             if writer is not None:
                 writer.add_scalars(
                     {
@@ -181,7 +195,13 @@ def train_epoch(
                 )
 
         # xm.mark_step()
+        train_meter.iter_toc()  # measure allreduce for this meter
+        train_meter.log_iter_stats(cur_epoch, cur_iter)
+        train_meter.iter_tic()
 
+    # Log epoch stats.
+    train_meter.log_epoch_stats(cur_epoch)
+    train_meter.reset()
 
 @torch.no_grad()
 def eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer=None):
@@ -345,7 +365,30 @@ def construct_fake_loader():
               1),
         sample_count=50000 // 16 // xr.world_size())
     return train_loader, test_loader
-    
+
+def calculate_and_update_precise_bn(loader, model, device, num_iters=200, use_gpu=True):
+    """
+    Update the stats in bn layers by calculate the precise stats.
+    Args:
+        loader (loader): data loader to provide training data.
+        model (model): model to update the bn stats.
+        num_iters (int): number of iterations to compute and update the bn stats.
+        use_gpu (bool): whether to use GPU or not.
+    """
+
+    def _gen_loader():
+        for inputs, *_ in loader:
+            if use_gpu:
+                if isinstance(inputs, (list,)):
+                    for i in range(len(inputs)):
+                        inputs[i] = inputs[i].to(device,non_blocking=True)
+                else:
+                    inputs = inputs.to(device,non_blocking=True)
+            yield inputs
+
+    # Update the bn stats.
+    update_bn_stats(model, _gen_loader(), num_iters)
+
 def train(cfg):
     """
     Train a video model for many epochs on train set and evaluate it on val set.
@@ -418,21 +461,20 @@ def train(cfg):
         if cfg.BN.USE_PRECISE_STATS
         else None
     )
-
-    train_meter = None
-    val_meter = None
-    # logger.info("Set up writer...")
+    
+    train_meter = TrainMeter(len(train_loader), cfg)
+    val_meter = ValMeter(len(val_loader), cfg)
+    # train_meter = None
+    # val_meter = None
+    logger.info("Set up writer...")
     # set up writer for logging to Tensorboard format.
-    # if cfg.TENSORBOARD.ENABLE and du.is_master_proc(
-    #     cfg.NUM_GPUS * cfg.NUM_SHARDS
-    # ):
     writer = tb.TensorboardWriter(cfg)
     # else:
     #     writer = None
 
     # Perform the training loop.
     logger.info("Start epoch: {}".format(start_epoch + 1))
-
+    print(f"Start epoch: {start_epoch + 1}")
     for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
 
         # logger.info("Start train epoch")
@@ -458,6 +500,7 @@ def train(cfg):
             calculate_and_update_precise_bn(
                 precise_bn_loader,
                 model,
+                device,
                 min(cfg.BN.NUM_BATCHES_PRECISE, len(precise_bn_loader)),
                 cfg.NUM_GPUS > 0,
             )
@@ -501,5 +544,5 @@ if __name__ == "__main__":
     xla.launch(
                 _mp_fn,
                 args=(cfg,),
-                debug_single_process=True
+                debug_single_process=False
             )
