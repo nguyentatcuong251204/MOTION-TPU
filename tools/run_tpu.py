@@ -461,7 +461,7 @@ def train(cfg):
         if cfg.BN.USE_PRECISE_STATS
         else None
     )
-    
+
     train_meter = TrainMeter(len(train_loader), cfg)
     val_meter = ValMeter(len(val_loader), cfg)
     # train_meter = None
@@ -469,8 +469,7 @@ def train(cfg):
     logger.info("Set up writer...")
     # set up writer for logging to Tensorboard format.
     writer = tb.TensorboardWriter(cfg)
-    # else:
-    #     writer = None
+
 
     # Perform the training loop.
     logger.info("Start epoch: {}".format(start_epoch + 1))
@@ -544,5 +543,5 @@ if __name__ == "__main__":
     xla.launch(
                 _mp_fn,
                 args=(cfg,),
-                debug_single_process=False
+                debug_single_process=0
             )
