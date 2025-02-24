@@ -18,8 +18,8 @@ import timesformer.utils.logging as logging
 import timesformer.utils.multiprocessing as mpu
 from timesformer.datasets.utils import pack_pathway_output
 from timesformer.models.batchnorm_helper import SubBatchNorm3d
-import torch_xla as xla
-import torch_xla.distributed.xla_backend
+# import torch_xla as xla
+# import torch_xla.distributed.xla_backend
 
 logger = logging.get_logger(__name__)
 

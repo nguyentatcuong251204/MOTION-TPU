@@ -206,6 +206,10 @@ _C.MODEL = CfgNode()
 # Model architecture.
 _C.MODEL.ARCH = "slowfast"
 
+# Multimodal fusion mode
+_C.MODEL.FUSION_MODE = "ofattention"
+_C.MODEL.VISUAL_MODEL = "dino"
+
 # Model name
 _C.MODEL.MODEL_NAME = "SlowFast"
 

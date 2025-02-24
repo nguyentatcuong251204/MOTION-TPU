@@ -1,3 +1,8 @@
+# Moose
+
+python setup.py build develop & pip install e .
+CUDA_VISIBLE_DEVICES=1 python tools/run_net.py --cfg /data2/hongn/TimePSFormer/configs/Kinetics/Moose_divST_8x32_224.yaml
+
 # TimeSformer
 
 This is an official pytorch implementation of our ICML 2021 paper [Is Space-Time Attention All You Need for Video Understanding?](https://arxiv.org/pdf/2102.05095.pdf). In this repository, we provide PyTorch code for training and testing our proposed TimeSformer model. TimeSformer provides an efficient video classification framework that achieves state-of-the-art results on several video action recognition benchmarks such as Kinetics-400.

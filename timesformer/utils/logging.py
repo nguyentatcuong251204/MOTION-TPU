@@ -13,7 +13,7 @@ import simplejson
 from fvcore.common.file_io import PathManager
 
 import timesformer.utils.distributed as du
-
+LEVEL = logging.INFO # logging level -- set logging.DEBUG to DEBUG
 
 def _suppress_print():
     """
@@ -49,7 +49,7 @@ def setup_logging(output_dir=None):
         _suppress_print()
 
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(LEVEL)
     logger.propagate = False
     plain_formatter = logging.Formatter(
         "[%(asctime)s][%(levelname)s] %(filename)s: %(lineno)3d: %(message)s",
@@ -58,14 +58,14 @@ def setup_logging(output_dir=None):
 
     if du.is_master_proc():
         ch = logging.StreamHandler(stream=sys.stdout)
-        ch.setLevel(logging.DEBUG)
+        ch.setLevel(LEVEL)
         ch.setFormatter(plain_formatter)
         logger.addHandler(ch)
 
     if output_dir is not None and du.is_master_proc(du.get_world_size()):
         filename = os.path.join(output_dir, "stdout.log")
         fh = logging.StreamHandler(_cached_log_stream(filename))
-        fh.setLevel(logging.DEBUG)
+        fh.setLevel(LEVEL)
         fh.setFormatter(plain_formatter)
         logger.addHandler(fh)
 

@@ -6,7 +6,7 @@ import numpy as np
 import pprint
 import torch
 from fvcore.nn.precise_bn import get_bn_modules, update_bn_stats
-import torch.distributed as dist
+
 import timesformer.models.losses as losses
 import timesformer.models.optimizer as optim
 import timesformer.utils.checkpoint as cu
@@ -22,15 +22,12 @@ from timesformer.utils.multigrid import MultigridSchedule
 
 from timm.data import Mixup
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
-import torch_xla as xla
-import torch_xla.core.xla_model as xm
 
-# device = xm.xla_device()
-# logger = logging.get_logger(__name__)
+logger = logging.get_logger(__name__)
 
 
 def train_epoch(
-    train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None, logger=None, device = 'cpu'
+    train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer=None
 ):
     """
     Perform the video training for one epoch.
@@ -46,56 +43,37 @@ def train_epoch(
         writer (TensorboardWriter, optional): TensorboardWriter object
             to writer Tensorboard log.
     """
-
-    logger.info('Turn of Enable .train() mode.')
-    # model.train()
-    # train_meter.iter_tic()
+    # Enable train mode.
+    model.train()
+    train_meter.iter_tic()
     data_size = len(train_loader)
 
     cur_global_batch_size = cfg.NUM_SHARDS * cfg.TRAIN.BATCH_SIZE
     num_iters = cfg.GLOBAL_BATCH_SIZE // cur_global_batch_size
 
     for cur_iter, (inputs, labels, _, meta) in enumerate(train_loader):
-        logger.info('Transfer the data to the current GPU device.')
-        if cfg.TRAIN.TPU_ENABLE == False:
+        # Transfer the data to the current GPU device.
+        if cfg.NUM_GPUS:
             if isinstance(inputs, (list,)):
                 for i in range(len(inputs)):
-                    inputs[i] = inputs[i].to(device, non_blocking=True)
+                    inputs[i] = inputs[i].cuda(non_blocking=True)
             else:
-                inputs = inputs.to(device, non_blocking=True)
-            labels = labels.to(device)
+                inputs = inputs.cuda(non_blocking=True)
+            labels = labels.cuda()
             for key, val in meta.items():
                 if isinstance(val, (list,)):
                     for i in range(len(val)):
-                        val[i] = val[i].to(device,non_blocking=True)
+                        val[i] = val[i].cuda(non_blocking=True)
                 else:
-                    meta[key] = val.to(device,non_blocking=True)
-        elif cfg.TRAIN.TPU_ENABLE == True:
-            # with xla.step():
-            #     if isinstance(inputs, (list,)):
-            #         for i in range(len(inputs)):
-            #             inputs[i] = inputs[i].to(device)
-            #     else:
-            #         inputs = inputs.to(device)
-            #     labels = labels.to(device)
-            #     for key, val in meta.items():
-            #         if isinstance(val, (list,)):
-            #             for i in range(len(val)):
-            #                 val[i] = val[i].to(device)
-            #         else:
-            #             meta[key] = val.to(device)
-            pass
-        else:
-            assert False, "Select incorrect NUM_GPUS"
+                    meta[key] = val.cuda(non_blocking=True)
 
-
-        logger.info('Update the learning rate.')
+        # Update the learning rate.
         lr = optim.get_epoch_lr(cur_epoch + float(cur_iter) / data_size, cfg)
         optim.set_lr(optimizer, lr)
 
-        # train_meter.data_toc()
+        train_meter.data_toc()
 
-        logger.info('Explicitly declare reduction to mean.')
+        # Explicitly declare reduction to mean.
         if not cfg.MIXUP.ENABLED:
            loss_fun = losses.get_loss_func(cfg.MODEL.LOSS_FUNC)(reduction="mean")
         else:
@@ -111,7 +89,7 @@ def train_epoch(
         else:
             preds = model(inputs)
 
-        logger.info('Compute the loss.')
+        # Compute the loss.
         loss = loss_fun(preds, labels)
 
         if cfg.MIXUP.ENABLED:
@@ -122,42 +100,21 @@ def train_epoch(
 
 
         if cur_global_batch_size >= cfg.GLOBAL_BATCH_SIZE:
-            if cfg.TRAIN.TPU_ENABLE == False:
             # Perform the backward pass.
-                optimizer.zero_grad()
-                loss.backward()
-                # Update the parameters.
-                optimizer.step()
-            else:
-            # Perform the backward pass.
-                with xla.step():
-                    optimizer.zero_grad()
-                    loss.backward()
-                    # Update the parameters.
-                    xm.optimizer_step(optimizer)
+            optimizer.zero_grad()
+            loss.backward()
+            # Update the parameters.
+            optimizer.step()
         else:
-            if cfg.TRAIN.TPU_ENABLE == False:
-                if cur_iter == 0:
-                    optimizer.zero_grad()
-                loss.backward()
-                if (cur_iter + 1) % num_iters == 0:
-                    for p in model.parameters():
-                        if(p.grad is not None):
-                            p.grad /= num_iters
-                    optimizer.step()
-                    optimizer.zero_grad()
-            else:
-                with xla.step():
-                    if cur_iter == 0:
-                        optimizer.zero_grad()
-                    loss.backward()
-                    if (cur_iter + 1) % num_iters == 0:
-                        for p in model.parameters():
-                            if(p.grad is not None):
-                                p.grad /= num_iters
-                        # optimizer.step()
-                        xm.optimizer_step(optimizer)
-                        optimizer.zero_grad()
+            if cur_iter == 0:
+                optimizer.zero_grad()
+            loss.backward()
+            if (cur_iter + 1) % num_iters == 0:
+                for p in model.parameters():
+                    if(p.grad is not None):
+                        p.grad /= num_iters
+                optimizer.step()
+                optimizer.zero_grad()
 
         if cfg.DETECTION.ENABLE:
             if cfg.NUM_GPUS > 1:
@@ -200,16 +157,16 @@ def train_epoch(
                 )
 
             # Update and log stats.
-            # train_meter.update_stats(
-            #     top1_err,
-            #     top5_err,
-            #     loss,
-            #     lr,
-            #     inputs[0].size(0)
-            #     * max(
-            #         cfg.NUM_GPUS, 1
-            #     ),  # If running  on CPU (cfg.NUM_GPUS == 1), use 1 to represent 1 CPU.
-            # )
+            train_meter.update_stats(
+                top1_err,
+                top5_err,
+                loss,
+                lr,
+                inputs[0].size(0)
+                * max(
+                    cfg.NUM_GPUS, 1
+                ),  # If running  on CPU (cfg.NUM_GPUS == 1), use 1 to represent 1 CPU.
+            )
             # write to tensorboard format if available.
             if writer is not None:
                 writer.add_scalars(
@@ -222,15 +179,13 @@ def train_epoch(
                     global_step=data_size * cur_epoch + cur_iter,
                 )
 
-        # train_meter.iter_toc()  # measure allreduce for this meter
-        # train_meter.log_iter_stats(cur_epoch, cur_iter)
-        # train_meter.iter_tic()
-
-        xm.mark_step()
+        train_meter.iter_toc()  # measure allreduce for this meter
+        train_meter.log_iter_stats(cur_epoch, cur_iter)
+        train_meter.iter_tic()
 
     # Log epoch stats.
-    # train_meter.log_epoch_stats(cur_epoch)
-    # train_meter.reset()
+    train_meter.log_epoch_stats(cur_epoch)
+    train_meter.reset()
 
 
 @torch.no_grad()
@@ -257,16 +212,16 @@ def eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer=None):
             # Transferthe data to the current GPU device.
             if isinstance(inputs, (list,)):
                 for i in range(len(inputs)):
-                    inputs[i] = inputs[i].to(device,non_blocking=True)
+                    inputs[i] = inputs[i].cuda(non_blocking=True)
             else:
-                inputs = inputs.to(device,non_blocking=True)
-            labels = labels.to(device)
+                inputs = inputs.cuda(non_blocking=True)
+            labels = labels.cuda()
             for key, val in meta.items():
                 if isinstance(val, (list,)):
                     for i in range(len(val)):
-                        val[i] = val[i].to(device,non_blocking=True)
+                        val[i] = val[i].cuda(non_blocking=True)
                 else:
-                    meta[key] = val.to(device,non_blocking=True)
+                    meta[key] = val.cuda(non_blocking=True)
         val_meter.data_toc()
 
         if cfg.DETECTION.ENABLE:
@@ -369,9 +324,9 @@ def calculate_and_update_precise_bn(loader, model, num_iters=200, use_gpu=True):
             if use_gpu:
                 if isinstance(inputs, (list,)):
                     for i in range(len(inputs)):
-                        inputs[i] = inputs[i].to(device,non_blocking=True)
+                        inputs[i] = inputs[i].cuda(non_blocking=True)
                 else:
-                    inputs = inputs.to(device,non_blocking=True)
+                    inputs = inputs.cuda(non_blocking=True)
             yield inputs
 
     # Update the bn stats.
@@ -433,18 +388,14 @@ def train(cfg):
             slowfast/config/defaults.py
     """
     # Set up environment.
-    if(cfg.TRAIN.TPU_ENABLE == False):
-        du.init_distributed_training(cfg)
-    else:
-        dist.init_process_group(
-                "xla", 
-                init_method='xla://')
+    du.init_distributed_training(cfg)
     # Set random seed from configs.
     np.random.seed(cfg.RNG_SEED)
     torch.manual_seed(cfg.RNG_SEED)
 
     # Setup logging format.
     logging.setup_logging(cfg.OUTPUT_DIR)
+    # logging.basicConfig(level=logging.DEBUG)
 
     # Init multigrid.
     multigrid = None
@@ -454,10 +405,8 @@ def train(cfg):
         if cfg.MULTIGRID.LONG_CYCLE:
             cfg, _ = multigrid.update_long_cycle(cfg, cur_epoch=0)
     # Print config.
-    # print("Train with config:")
-    print(pprint.pformat(cfg))
-    # logger.info("Train with config:")
-    # logger.info(pprint.pformat(cfg))
+    logger.info("Train with config:")
+    logger.info(pprint.pformat(cfg))
 
     # Build the video model and print model statistics.
     model = build_model(cfg)
@@ -524,167 +473,13 @@ def train(cfg):
                 )
 
         # Shuffle the dataset.
-        # loader.shuffle_dataset(train_loader, cur_epoch)
+        loader.shuffle_dataset(train_loader, cur_epoch)
 
         # Train for one epoch.
         train_epoch(
             train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer
         )
 
-        is_checkp_epoch = cu.is_checkpoint_epoch(
-            cfg,
-            cur_epoch,
-            None if multigrid is None else multigrid.schedule,
-        )
-        is_eval_epoch = misc.is_eval_epoch(
-            cfg, cur_epoch, None if multigrid is None else multigrid.schedule
-        )
-
-        # Compute precise BN stats.
-        if (
-            (is_checkp_epoch or is_eval_epoch)
-            and cfg.BN.USE_PRECISE_STATS
-            and len(get_bn_modules(model)) > 0
-        ):
-            calculate_and_update_precise_bn(
-                precise_bn_loader,
-                model,
-                min(cfg.BN.NUM_BATCHES_PRECISE, len(precise_bn_loader)),
-                cfg.NUM_GPUS > 0,
-            )
-        _ = misc.aggregate_sub_bn_stats(model)
-
-        # Save a checkpoint.
-        if is_checkp_epoch:
-            cu.save_checkpoint(cfg.OUTPUT_DIR, model, optimizer, cur_epoch, cfg)
-        # Evaluate the model on validation set.
-        if is_eval_epoch:
-            eval_epoch(val_loader, model, val_meter, cur_epoch, cfg, writer)
-
-    if writer is not None:
-        writer.close()
-
-def _mp_fn(index, cfg):
-    """
-    Train a video model for many epochs on train set and evaluate it on val set.
-    Args:
-        cfg (CfgNode): configs. Details can be found in
-            slowfast/config/defaults.py
-    """
-    logger = logging.get_logger(__name__)
-    logger.info("initialize xm.xla_device()...")
-    device = xm.xla_device()
-
-    # Set up environment.
-    logger.info("initialize distributed training...")
-    if(cfg.TRAIN.TPU_ENABLE == False):
-        du.init_distributed_training(cfg)
-    else:
-        dist.init_process_group(
-                "xla", 
-                init_method='xla://')
-    # Set random seed from configs.
-    np.random.seed(cfg.RNG_SEED)
-    torch.manual_seed(cfg.RNG_SEED)
-
-    # Setup logging format.
-    logging.setup_logging(cfg.OUTPUT_DIR)
-
-    logger.info(" Init multigrid....")
-    # Init multigrid.
-    multigrid = None
-    if cfg.MULTIGRID.LONG_CYCLE or cfg.MULTIGRID.SHORT_CYCLE:
-        multigrid = MultigridSchedule()
-        cfg = multigrid.init_multigrid(cfg)
-        if cfg.MULTIGRID.LONG_CYCLE:
-            cfg, _ = multigrid.update_long_cycle(cfg, cur_epoch=0)
-    # Print config.
-    # print("Train with config:")
-    # print(pprint.pformat(cfg))
-    logger.info("Train with config:")
-    logger.info(pprint.pformat(cfg))
-
-    logger.info("Contruct model...")
-    # Build the video model and print model statistics.
-    model = build_model(cfg)
-    # if(cfg.TRAIN.TPU_ENABLE):
-    #     print('broadcast_master_param')
-    #     xm.broadcast_master_param(model)
-
-    if du.is_master_proc() and cfg.LOG_MODEL_INFO:
-        misc.log_model_info(model, cfg, use_train_input=True)
-
-    # Construct the optimizer.
-    optimizer = optim.construct_optimizer(model, cfg)
-    # logger.info("Contruct model...")
-    # Load a checkpoint to resume training if applicable.
-    if not cfg.TRAIN.FINETUNE:
-      start_epoch = cu.load_train_checkpoint(cfg, model, optimizer)
-    else:
-      start_epoch = 0
-      cu.load_checkpoint(cfg.TRAIN.CHECKPOINT_FILE_PATH, model)
-
-    logger.info("Contruct dataloader...")
-    # Create the video train and val loaders.
-    train_loader = loader.construct_loader(cfg, "train")
-    val_loader = loader.construct_loader(cfg, "val")
-
-    logger.info("Contruct trainloader precise_bn_loader...")
-    precise_bn_loader = (
-        loader.construct_loader(cfg, "train", is_precise_bn=True)
-        if cfg.BN.USE_PRECISE_STATS
-        else None
-    )
-
-    # train_meter = TrainMeter(len(train_loader), cfg)
-    # val_meter = ValMeter(len(val_loader), cfg)
-    train_meter = None
-    logger.info("Set up writer...")
-    # set up writer for logging to Tensorboard format.
-    if cfg.TENSORBOARD.ENABLE and du.is_master_proc(
-        cfg.NUM_GPUS * cfg.NUM_SHARDS
-    ):
-        writer = tb.TensorboardWriter(cfg)
-    else:
-        writer = None
-
-    # Perform the training loop.
-    logger.info("Start epoch: {}".format(start_epoch + 1))
-
-    for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
-        # if cfg.MULTIGRID.LONG_CYCLE:
-        #     cfg, changed = multigrid.update_long_cycle(cfg, cur_epoch)
-        #     if changed:
-        #         (
-        #             model,
-        #             optimizer,
-        #             train_loader,
-        #             val_loader,
-        #             precise_bn_loader,
-        #             train_meter,
-        #             val_meter,
-        #         ) = build_trainer(cfg)
-
-        #         # Load checkpoint.
-        #         if cu.has_checkpoint(cfg.OUTPUT_DIR):
-        #             last_checkpoint = cu.get_last_checkpoint(cfg.OUTPUT_DIR)
-        #             assert "{:05d}.pyth".format(cur_epoch) in last_checkpoint
-        #         else:
-        #             last_checkpoint = cfg.TRAIN.CHECKPOINT_FILE_PATH
-        #         logger.info("Load from {}".format(last_checkpoint))
-        #         cu.load_checkpoint(
-        #             last_checkpoint, model, cfg.NUM_GPUS > 1, optimizer
-        #         )
-
-        # Shuffle the dataset.
-        # loader.shuffle_dataset(train_loader, cur_epoch)
-        
-        # Train for one epoch.
-        logger.info("Start train epoch")
-        train_epoch(
-            train_loader, model, optimizer, train_meter, cur_epoch, cfg, writer, logger, device
-        )
-        logger.info("End train epoch")
         is_checkp_epoch = cu.is_checkpoint_epoch(
             cfg,
             cur_epoch,

@@ -79,7 +79,7 @@ class Attention(nn.Module):
     def forward(self, x):
         B, N, C = x.shape
         if self.with_qkv:
-        #    print('[The qkc dimentions]', B, N, 3, self.num_heads, C // self.num_heads)
+        #    print('[The qkc dimentions]', B, N, 3, self.num_heads, C // self.num_heads, C)
            qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
            q, k, v = qkv[0], qkv[1], qkv[2]
         else:
@@ -255,9 +255,9 @@ class VisionTransformer(nn.Module):
     # def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dim=768, depth=12, pretrain_space_embs = None,
     #              num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
     #              drop_path_rate=0.1, hybrid_backbone=None, norm_layer=nn.LayerNorm, num_frames=8, attention_type='divided_space_time', dropout=0.):
-    def __init__(self, img_size=1024, patch_size=16, in_chans=3, num_classes=1000, embed_dim=1024, depth=12, pretrain_space_embs_path = "/home/hongn/sapiens/pretrain/checkpoints/sapiens_0.3b/sapiens_0.3b_epoch_1600_clean.pth",
+    def __init__(self, img_size=1024, patch_size=16, in_chans=3, num_classes=1000, embed_dim=1024, depth=12, pretrain_space_embs_path = "/data2/hongn/sapiens/pretrain/checkpoints/sapiens_0.3b/sapiens_0.3b_epoch_1600_clean.pth",
                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
-                drop_path_rate=0.1, hybrid_backbone=None, norm_layer=nn.LayerNorm, num_frames=8, attention_type='time_only', dropout=0.):
+                drop_path_rate=0.1, hybrid_backbone=None, norm_layer=nn.LayerNorm, num_frames=8, attention_type='space_only', dropout=0.):
         super().__init__()
         self.attention_type = attention_type
         self.depth = depth
@@ -273,7 +273,7 @@ class VisionTransformer(nn.Module):
 
         if(self.attention_type == 'time_only'):
             assert self.pretrain_space_embs_path != None, "Please input pretrain_space_embs=path/to/pretrain_sapiens_models"
-            model_config = "/home/hongn/sapiens/pretrain/configs/sapiens_mae/humans_300m_test/mae_sapiens_0.3b-p16_8xb512-coslr-1600e_humans_300m_test.py"
+            model_config = "/data2/hongn/sapiens/pretrain/configs/sapiens_mae/humans_300m_test/mae_sapiens_0.3b-p16_8xb512-coslr-1600e_humans_300m_test.py"
             # checkpoint = "/mnt/c/Users/PCM/Documents/GitHub/VideoUnderstanding/sapiens/pretrain/checkpoints/sapiens_0.3b/sapiens_0.3b_epoch_1600_clean.pth"
             with torch.no_grad():
                 self.pretrain_space_embs = get_model(model=model_config, pretrained=self.pretrain_space_embs_path, device='cpu', backbone=dict(out_indices=(0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24)))
@@ -411,11 +411,11 @@ class VisionTransformer(nn.Module):
             x = torch.mean(x, 1) # averaging predictions for every frame
 
         x = self.norm(x)
-        return x[:, 0]
+        return x#[:, 0]
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        x = self.head(x[:, 0])
         return x
 
 
@@ -498,4 +498,266 @@ class TimePSformer(nn.Module):
             load_pretrained(self.model, num_classes=self.model.num_classes, in_chans=kwargs.get('in_chans', 3), filter_fn=_conv_filter, img_size=img_size, num_frames=num_frames, num_patches=self.num_patches, attention_type=self.attention_type, pretrained_model=pretrained_model)
     def forward(self, x):
         x = self.model(x)
+        return x
+    
+
+class MotionPatchEmbed(nn.Module):
+    """ Image to Patch Embedding
+    """
+    def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768):
+        super().__init__()
+        num_patches = (img_size // patch_size) * (img_size // patch_size)
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.num_patches = num_patches
+
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+
+    def forward(self, x):
+        B, C, H, W = x.shape
+        x = self.proj(x).flatten(2).transpose(1, 2)
+        return x
+    
+from transformers import AutoImageProcessor, AutoModel
+from timesformer.models.moose import *
+
+class MOOSE_Encoder(nn.Module):
+    """ Vision Transformer """
+    def __init__(self, raft_args, cfg):
+        super().__init__()
+        self.cfg = cfg
+        # self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.motion_model = self._init_motion_model(raft_args)
+        # self.patch_embed = PatchEmbed(img_size=28, patch_size=2, in_chans=2, embed_dim=768) # Flow patches embedding
+        self.visual_model = self._init_visual_model()
+        # self.motion_feature_extractor = VisionTransformer(img_size=img_size, num_classes=num_classes, patch_size=motion_patch_size, embed_dim=embed_dim, depth=3, num_heads=12, mlp_ratio=1, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1, num_frames=num_frames)
+
+        # self.crossatt = CustomAttentionWithResidual(embed_size = embed_dim)
+        # self.head = nn.Linear(embed_dim, num_classes) if num_classes > 0 else nn.Identity()
+
+    def _init_motion_model(self, args):
+        with torch.no_grad():
+            motion_model = torch.nn.DataParallel(RAFT(args))
+            for p in motion_model.parameters():
+                p.requires_grad = False   
+        motion_model.load_state_dict(torch.load(args.model))
+        motion_model = motion_model.module
+        return motion_model
+
+    def _init_visual_model(self):
+        if(self.cfg.MODEL.VISUAL_MODEL == "dino"):
+            with torch.no_grad():
+                model = vits.__dict__['vit_base'](patch_size=16, num_classes=0)
+                for p in model.parameters():
+                    p.requires_grad = False
+            print("Since no pretrained weights have been provided, we load the reference pretrained DINO weights.")
+            url = "dino_vitbase16_pretrain/dino_vitbase16_pretrain.pth"
+            state_dict = torch.hub.load_state_dict_from_url(url="https://dl.fbaipublicfiles.com/dino/" + url)
+            model.load_state_dict(state_dict, strict=True)
+        elif(self.cfg.MODEL.VISUAL_MODEL == "dinov2"):
+            with torch.no_grad():
+                model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vitb14_reg')
+        return model
+
+    def motion_forward(self, x):
+        '''
+            Inputs should have shape of (b, c, t, w, h) Example: (4, 3, 8, 224, 224)
+        '''
+        with torch.no_grad():
+            x = rearrange(x, 'b c t w h -> b t c w h')
+            flow_embs_batches = []
+            for inputs in x: # loop over batches
+                # denomalized_imgs = denomalizing_img(inputs)
+                # images = load_image_from_uint8array(denomalized_imgs)
+                images = denomalizing_img(inputs)
+                flow_embs = []
+                for index in range(images.shape[0]-1): #loop over time
+                    image1 = images[index].unsqueeze(0)
+                    image2 = images[index+1].unsqueeze(0)
+                    # print(image1.shape)
+                    padder = InputPadder(image1.shape)
+                    image1, image2 = padder.pad(image1, image2)
+
+                    flow_low, flow_up = self.motion_model(image1, image2, iters=1, test_mode=True)
+                    # flow_embedding = self.patch_embed(flow_low)
+                    flow_embs.append(flow_up)
+                    
+                    # viz(image1, flow_up, index)
+                flow_embs = torch.stack(flow_embs)
+                flow_embs_batches.append(flow_embs)
+            ret = torch.stack(flow_embs_batches)
+        return ret
+
+    def visual_forward(self, inputs):
+        '''
+            Inputs should have shape of (b, c, t, w, h) Example: (4, 3, 8, 224, 224)
+        '''
+        if(self.cfg.MODEL.VISUAL_MODEL == "dino"):
+            with torch.no_grad():
+                index_of_time_to_get_principle_embeddings = 0 # only get the first frame for now
+                img = inputs[:,:,index_of_time_to_get_principle_embeddings,:]
+                features = self.visual_model.get_intermediate_layers(img, len(self.visual_model.blocks))
+                features = features[-1]  # residual stream @ final block
+        elif(self.cfg.MODEL.VISUAL_MODEL == "dinov2"):
+            with torch.no_grad():
+                index_of_time_to_get_principle_embeddings = 0 # only get the first frame for now
+                img = inputs[:,:,index_of_time_to_get_principle_embeddings,:]
+                output = self.visual_model.forward_features(img)
+                features = torch.concat((output['x_norm_clstoken'].unsqueeze(1), output['x_norm_patchtokens']), dim=1)
+        else:
+            assert False, f"no VISUAL_MODEL name {self.cfg.MODEL.VISUAL_MODEL} found"
+            # features.requires_grad = False
+        return features
+        # print([features.shape])
+
+    def forward(self, inputs):
+        with torch.no_grad():
+            visual_embeddings = self.visual_forward(inputs) # b x 1 x 197 x 768
+            motion_embeddings = self.motion_forward(inputs) # [b, t, 1, 2, 28, 28]
+            # b = motion_flows.shape[0]
+            # t = motion_flows.shape[1]
+            # print(motion_flows.shape)
+            # motion_flows = rearrange(motion_flows, 'b t a c w h -> (b t a) c w h')
+            # motion_embeddings = self.motion_feature_extractor(motion_flows) 
+            # print(motion_embeddings.shape)
+            # assert False
+        return visual_embeddings, motion_embeddings
+
+import argparse
+# from timesformer.models.moose import MOOSE_Encoder, CustomAttentionWithResidual
+# from 
+parser = argparse.ArgumentParser()
+parser.add_argument('--model', help="restore checkpoint")
+parser.add_argument('--path', help="dataset for evaluation")
+parser.add_argument('--small', action='store_true', help='use small model')
+parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
+parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
+
+raft_args = parser.parse_args(['--model', '/data2/hongn/RAFT/models/raft-things.pth', 
+                        '--path', '/data2/hongn/RAFT/demo-frames/care'])
+from bidirectional_cross_attention import BidirectionalCrossAttention
+
+@MODEL_REGISTRY.register()
+class MOOSE(nn.Module):
+    def __init__(self, cfg, raft_args = raft_args, norm_layer=partial(nn.LayerNorm, eps=1e-6), mlp_ratio=1., act_layer=nn.GELU, drop=0., **kwargs):
+        super(MOOSE, self).__init__()
+        self.pretrained=False
+        patch_size = 14 if(cfg.MODEL.VISUAL_MODEL == 'dinov2') else 16
+        self.fusion_mode = cfg.MODEL.FUSION_MODE #"concat" # can be [concat, ofattention, biattention]
+        # self.model = MOOSE(raft_args, raft_args, num_classes=cfg.MODEL.NUM_CLASSES)
+        self.crossatt = CustomAttentionWithResidual(embed_size = 768)
+        with torch.no_grad():
+            self.moose_encoder = MOOSE_Encoder(raft_args, cfg)
+        # self.patch_embed = MotionPatchEmbed(img_size=224, patch_size=14, in_chans=2, embed_dim=768) # Flow patches embedding
+        num_classes = 400
+
+        # self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        # self.motion_feature_extractor = VisionTransformer(img_size=28, num_classes=400, patch_size=2, embed_dim=128, depth=3, num_heads=2, in_chans=2, mlp_ratio=1, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1, num_frames=7, attention_type='space_only')
+        self.motion_feature_extractor  = vits.__dict__['vit_tiny'](patch_size=patch_size, num_classes=0, in_chans=2, img_size=(224,224))
+        if(self.fusion_mode == "ofattention"):
+            fc_dim= 768
+        elif(self.fusion_mode == "concat" or self.fusion_mode == "biconcat"):
+            fc_dim= 768 + 192
+        elif(self.fusion_mode == "viattention"):
+            fc_dim= 192
+        else:
+            fc_dim= 768
+
+        self.norm2 = norm_layer(fc_dim)
+        mlp_hidden_dim = int(fc_dim * mlp_ratio)
+        self.mlp = Mlp(in_features=fc_dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.head = nn.Linear(fc_dim, num_classes) if num_classes > 0 else nn.Identity()
+        # print("self.fusion_mode = onevisualmotion")
+        
+        self.visual_mask = torch.ones((1, 257)).bool()
+        self.motion_mask = torch.ones((1, 257)).bool()
+        if(self.fusion_mode == "viattention"):
+            self.joint_cross_attn = BidirectionalCrossAttention(
+                dim = 192,
+                heads = 8,
+                dim_head = 64,
+                context_dim = 768
+            )
+        else:
+            self.joint_cross_attn = BidirectionalCrossAttention(
+                dim = 768,
+                heads = 8,
+                dim_head = 64,
+                context_dim = 192
+            )
+
+    def forward(self, x):
+        # assert False, "self.fusion_mode = onevisualmotion"
+        with torch.no_grad():
+            visual_embeddings = self.moose_encoder.visual_forward(x)
+            if(self.fusion_mode != 'space_only'):
+                flow_low = self.moose_encoder.motion_forward(x)
+                # visual_embeddings, flow_low = x[0], x[1]
+                # print(visual_embeddings.shape, flow_low.shape)
+                # assert False
+                b = flow_low.shape[0]
+                t = flow_low.shape[1]
+                # flow_low = rearrange(flow_low, 'b t a c w h -> b (c t a) w h')
+                flow_low = rearrange(flow_low[:,0,:], 'b a c w h -> (b a) c w h')
+                # print(flow_low.shape, '----------------------')
+                # video_embeddings = visual_embeddings
+                # motion_embeddings = self.motion_feature_extractor.forward_features(flow_low) #[2, 197, 768]
+                motion_embeddings = self.motion_feature_extractor.get_intermediate_layers(flow_low, n=3)[-1] #[2, 197, 192] = [c, patchs+1, emb_dim]
+        # print(motion_embeddings.shape)
+        # assert False
+        # motion_embeddings = rearrange(motion_embeddings, '(b t) e l -> b t e l', b = b, t = t)
+        # print(visual_embeddings.shape, motion_embeddings.shape)
+        # assert False
+        ## Visual-Motion Fussion
+        
+        if(self.fusion_mode == "ofattention"):
+            # video_embeddings = self.crossatt(visual_embeddings, motion_embeddings)
+            # video_embeddings = self.mlp(self.norm2(video_embeddings))
+            visual_embeddings, motion_embeddings = self.joint_cross_attn(
+                                    visual_embeddings,
+                                    motion_embeddings,
+                                    mask = self.visual_mask.cuda(),
+                                    context_mask = self.motion_mask.cuda()
+                                )
+            video_embeddings = self.mlp(self.norm2(visual_embeddings))
+        if(self.fusion_mode == "viattention"):
+            # video_embeddings = self.crossatt(visual_embeddings, motion_embeddings)
+            # video_embeddings = self.mlp(self.norm2(video_embeddings))
+            motion_embeddings, visual_embeddings = self.joint_cross_attn(
+                                    motion_embeddings,
+                                    visual_embeddings,
+                                    mask = self.visual_mask.cuda(),
+                                    context_mask = self.motion_mask.cuda()
+                                )
+            video_embeddings = self.mlp(self.norm2(motion_embeddings))
+            # print(video_embeddings.shape)
+            # assert False
+        elif(self.fusion_mode == "biconcat"):
+            visual_embeddings, motion_embeddings = self.joint_cross_attn(
+                                    visual_embeddings,
+                                    motion_embeddings,
+                                    mask = self.visual_mask.cuda(),
+                                    context_mask = self.motion_mask.cuda()
+                                )
+            video_embeddings = torch.concat((visual_embeddings, motion_embeddings),dim=2)
+            video_embeddings = self.mlp(self.norm2(video_embeddings))
+            # print(visual_embeddings.shape, motion_embeddings.shape )
+            # assert False
+        elif(self.fusion_mode == "concat"):
+            # print(visual_embeddings.shape, motion_embeddings.shape)
+            # assert False
+            video_embeddings = torch.concat((visual_embeddings, motion_embeddings),dim=2)
+            video_embeddings = self.mlp(self.norm2(video_embeddings))
+            # print(video_embeddings.shape, )
+            # assert False
+        elif(self.fusion_mode == "space_only"):
+            video_embeddings = visual_embeddings
+        else:
+            for i in range(motion_embeddings.shape[1]):
+                video_embeddings = self.crossatt(video_embeddings, motion_embeddings[:,i,:])
+                video_embeddings = self.mlp(self.norm2(video_embeddings))
+        # print(video_embeddings.shape)
+        # assert False
+        x = video_embeddings[:, 0, :] # Get the cls_token
+        x = self.head(x)
         return x

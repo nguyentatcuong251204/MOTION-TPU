@@ -5,8 +5,8 @@ from timesformer.utils.misc import launch_job
 from timesformer.utils.parser import load_config, parse_args
 # import torch.distributed as dist
 from tools.test_net import test
-from tools.train_net import train, _mp_fn
-import torch_xla as xla
+from tools.train_net import train #,_mp_fn
+# import torch_xla as xla
 import timesformer.utils.logging as logging
 logger = logging.get_logger(__name__)
 

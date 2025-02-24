@@ -26,7 +26,11 @@ def construct_optimizer(model, cfg):
     bn_params = []
     # Non-batchnorm parameters.
     non_bn_parameters = []
+    unused_parameters = []
     for name, p in model.named_parameters():
+        if("moose_encoder" in name):
+            unused_parameters.append(p)
+            continue
         if "bn" in name:
             bn_params.append(p)
         else:
@@ -38,13 +42,14 @@ def construct_optimizer(model, cfg):
     optim_params = [
         {"params": bn_params, "weight_decay": cfg.BN.WEIGHT_DECAY},
         {"params": non_bn_parameters, "weight_decay": cfg.SOLVER.WEIGHT_DECAY},
+        # {"params": unused_parameters, "lr": 0.},
     ]
     # Check all parameters will be passed into optimizer.
-    assert len(list(model.parameters())) == len(non_bn_parameters) + len(
-        bn_params
-    ), "parameter size does not match: {} + {} != {}".format(
-        len(non_bn_parameters), len(bn_params), len(list(model.parameters()))
-    )
+    # assert len(list(model.parameters())) == len(non_bn_parameters) + len(
+    #     bn_params#) + len(unused_parameters
+    # ), "parameter size does not match: {} + {} != {}".format(
+    #     len(non_bn_parameters), len(bn_params), len(list(model.parameters()))
+    # )
 
     if cfg.SOLVER.OPTIMIZING_METHOD == "sgd":
         return torch.optim.SGD(

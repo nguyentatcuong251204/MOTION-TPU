@@ -5,8 +5,9 @@
 import torch
 import torch.distributed as dist
 # import torch.multiprocessing as mp
-import torch_xla as xla
-import torch_xla.distributed.xla_backend
+
+# import torch_xla as xla
+# import torch_xla.distributed.xla_backend
 
 def run(
     local_rank,
