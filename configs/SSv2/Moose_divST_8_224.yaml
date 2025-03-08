@@ -1,15 +1,14 @@
 TRAIN:
   ENABLE: True
   DATASET: ssv2
-  BATCH_SIZE: 512
+  BATCH_SIZE: 2
   EVAL_PERIOD: 1
   CHECKPOINT_PERIOD: 1
   AUTO_RESUME: True
-OUTPUT_DIR: ./checkpoints/ssv2/
 DATA:
   PATH_TO_DATA_DIR: "/data1/hongn/SSv2/labels"
   PATH_PREFIX: "/data1/hongn/SSv2/frames"
-  NUM_FRAMES: 8
+  NUM_FRAMES: 9
   SAMPLING_RATE: 8
   TRAIN_JITTER_SCALES: [256, 320]
   TRAIN_CROP_SIZE: 224
@@ -29,12 +28,15 @@ SOLVER:
   MOMENTUM: 0.9
   WEIGHT_DECAY: 1e-4
   OPTIMIZING_METHOD: sgd
+OUTPUT_DIR: ./checkpoints_ssv2/moose_biconcat_dinov2_8frame/
 MODEL:
-  MODEL_NAME: vit_base_patch16_224
+  MODEL_NAME: MOOSE
   NUM_CLASSES: 174
   ARCH: vit
   LOSS_FUNC: cross_entropy
   DROPOUT_RATE: 0.5
+  FUSION_MODE: biconcat
+  VISUAL_MODEL: dinov2
 TEST:
   ENABLE: True
   DATASET: ssv2

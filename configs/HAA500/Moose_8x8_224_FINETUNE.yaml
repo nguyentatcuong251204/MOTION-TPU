@@ -1,13 +1,24 @@
 TRAIN:
-  ENABLE: False
+  ENABLE: True
   DATASET: kinetics
-  BATCH_SIZE: 1
-  EVAL_PERIOD: 5
-  CHECKPOINT_PERIOD: 5
-  AUTO_RESUME: False
+  BATCH_SIZE: 224
+  EVAL_PERIOD: 1
+  CHECKPOINT_PERIOD: 1
+  AUTO_RESUME: True
   TPU_ENABLE: False
+  FINETUNE: True
+  CHECKPOINT_FILE_PATH: /data2/hongn/TimePSFormer/checkpoints/moose_biconcat_dinov2_8frame/checkpoints/checkpoint_epoch_00009.pyth
+OUTPUT_DIR: ./checkpoints_haa500/moose_biconcat_biconcat_8frame_tune/
+MODEL:
+  MODEL_NAME: MOOSE
+  NUM_CLASSES: 500
+  ARCH: vit
+  LOSS_FUNC: cross_entropy
+  DROPOUT_RATE: 0.5
+  FUSION_MODE: biconcat
+  VISUAL_MODEL: dinov2
 DATA:
-  PATH_TO_DATA_DIR: /data1/hongn/kinetics-dataset/k400
+  PATH_TO_DATA_DIR: /data1/hongn/haa500/
   NUM_FRAMES: 9
   SAMPLING_RATE: 8
   TRAIN_JITTER_SCALES: [256, 320]
@@ -22,29 +33,19 @@ SOLVER:
   LR_POLICY: steps_with_relative_lrs
   STEPS: [0, 11, 14]
   LRS: [1, 0.1, 0.01]
-  MAX_EPOCH: 50
+  MAX_EPOCH: 1000
   MOMENTUM: 0.9
   WEIGHT_DECAY: 1e-4
   OPTIMIZING_METHOD: sgd
-MODEL:
-  MODEL_NAME: MOOSE
-  NUM_CLASSES: 400
-  ARCH: vit
-  LOSS_FUNC: cross_entropy
-  DROPOUT_RATE: 0.5
-  FUSION_MODE: biconcat
-  VISUAL_MODEL: dinov2
 TEST:
-  ENABLE: True
+  ENABLE: False
   DATASET: kinetics
   BATCH_SIZE: 1
   NUM_ENSEMBLE_VIEWS: 1
   NUM_SPATIAL_CROPS: 3
-  CHECKPOINT_FILE_PATH: /data2/hongn/TimePSFormer/checkpoints/moose_biconcat_dinov2_8frame_maskarrow/checkpoints/checkpoint_epoch_00008.pyth
 DATA_LOADER:
   NUM_WORKERS: 4
   PIN_MEMORY: True
 NUM_GPUS: 1
 NUM_SHARDS: 1
 RNG_SEED: 0
-OUTPUT_DIR: /data2/hongn/TimePSFormer/checkpoints/
