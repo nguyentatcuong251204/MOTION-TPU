@@ -1,14 +1,15 @@
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 
 """Wrapper to train and test a video classification model."""
+from tqdm import tqdm
 from timesformer.utils.misc import launch_job
 from timesformer.utils.parser import load_config, parse_args
 # import torch.distributed as dist
 from tools.test_net import test
-from tools.train_net import train, _mp_fn
+# from tools.train_net import train_kinetic
 import torch_xla as xla
 import timesformer.utils.logging as logging
-logger = logging.get_logger(__name__)
+# logger = logging.get_logger(__name__)
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
 import numpy as np
 import pprint
@@ -119,8 +120,9 @@ def train_epoch(
         else:
             preds = model(inputs)
 
-        logger.info('Compute the loss.')
+        # logger.info('Compute the loss.')
         loss = loss_fun(preds, labels)
+
 
         if cfg.MIXUP.ENABLED:
             labels = hard_labels
@@ -333,7 +335,7 @@ def construct_loader(cfg, split, is_precise_bn=False):
         drop_last = False
 
     # Construct the dataset
-    dataset = build_dataset(dataset_name, cfg, split)[:16384]
+    dataset = build_dataset(dataset_name, cfg, split) 
     # print(dataset[1], dataset[1][0].shape, len(dataset[1]), len(dataset), xr.world_size())
     # print('Create a sampler for multi-process TRAIN.TPU_ENABLE')
     # print('Create a sampler for multi-process training')
@@ -474,7 +476,7 @@ def train(cfg):
     # Perform the training loop.
     logger.info("Start epoch: {}".format(start_epoch + 1))
     print(f"Start epoch: {start_epoch + 1}")
-    for cur_epoch in range(start_epoch, cfg.SOLVER.MAX_EPOCH):
+    for cur_epoch in tqdm(range(start_epoch, cfg.SOLVER.MAX_EPOCH), unit="EPOCH"):
 
         # logger.info("Start train epoch")
         train_epoch(

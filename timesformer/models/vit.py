@@ -541,7 +541,7 @@ class MOOSE_Encoder(nn.Module):
             motion_model = torch.nn.DataParallel(RAFT(args))
             for p in motion_model.parameters():
                 p.requires_grad = False   
-        motion_model.load_state_dict(torch.load(args.model))
+        motion_model.load_state_dict(torch.load(args.model, map_location=torch.device('cpu')))
         motion_model = motion_model.module
         return motion_model
 
@@ -664,7 +664,7 @@ parser.add_argument('--small', action='store_true', help='use small model')
 parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
 parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
 
-raft_args = parser.parse_args(['--model', '/data2/hongn/RAFT/models/raft-things.pth', 
+raft_args = parser.parse_args(['--model', '/home/hongn/TimePSFormer/raft-things.pth', 
                         '--path', '/data2/hongn/RAFT/demo-frames/care'])
 # from timesformer.models.moose import BidirectionalCrossAttention
 
@@ -748,24 +748,24 @@ class MOOSE(nn.Module):
             visual_embeddings, motion_embeddings = self.joint_cross_attn(
                                     visual_embeddings,
                                     motion_embeddings,
-                                    mask = self.visual_mask.cuda(),
-                                    context_mask = self.motion_mask.cuda()
+                                    mask = self.visual_mask,
+                                    context_mask = self.motion_mask
                                 )
             video_embeddings = self.mlp(self.norm2(visual_embeddings))
         elif(self.fusion_mode == "viattention"):
             motion_embeddings, visual_embeddings = self.joint_cross_attn(
                                     motion_embeddings,
                                     visual_embeddings,
-                                    mask = self.visual_mask.cuda(),
-                                    context_mask = self.motion_mask.cuda()
+                                    mask = self.visual_mask,
+                                    context_mask = self.motion_mask
                                 )
             video_embeddings = self.mlp(self.norm2(motion_embeddings))
         elif(self.fusion_mode == "biconcat"):
             visual_embeddings, motion_embeddings = self.joint_cross_attn(
                                     visual_embeddings,
                                     motion_embeddings,
-                                    mask = self.visual_mask.cuda(),
-                                    context_mask = self.motion_mask.cuda(),
+                                    mask = self.visual_mask,
+                                    context_mask = self.motion_mask,
                                     matrix_mask = "arrow"
                                 )
             video_embeddings = torch.concat((visual_embeddings, motion_embeddings),dim=2)
