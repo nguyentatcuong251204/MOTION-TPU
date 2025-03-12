@@ -138,6 +138,7 @@ class TestMeter(object):
         """
         Start to record time.
         """
+
         self.iter_timer.reset()
         self.data_timer.reset()
 
@@ -145,11 +146,16 @@ class TestMeter(object):
         """
         Stop to record time.
         """
-        self.iter_timer.pause()
-        self.net_timer.pause()
+        if not self.iter_timer._paused:
+            self.iter_timer.pause()
+        
+        if not self.net_timer._paused:
+            self.net_timer.pause()
 
     def data_toc(self):
-        self.data_timer.pause()
+
+        if not self.data_timer._paused:        
+            self.data_timer.pause()
         self.net_timer.reset()
 
     def finalize_metrics(self, ks=(1, 5)):
@@ -298,6 +304,7 @@ class TrainMeter(object):
         """
         Start to record time.
         """
+
         self.iter_timer.reset()
         self.data_timer.reset()
 
@@ -305,11 +312,16 @@ class TrainMeter(object):
         """
         Stop to record time.
         """
-        self.iter_timer.pause()
-        self.net_timer.pause()
+        if not self.iter_timer._paused:
+            self.iter_timer.pause()
+        
+        if not self.net_timer._paused:
+            self.net_timer.pause()
 
     def data_toc(self):
-        self.data_timer.pause()
+
+        if not self.data_timer._paused:        
+            self.data_timer.pause()
         self.net_timer.reset()
 
     def update_stats(self, top1_err, top5_err, loss, lr, mb_size, stats={}):
@@ -461,6 +473,7 @@ class ValMeter(object):
         """
         Start to record time.
         """
+
         self.iter_timer.reset()
         self.data_timer.reset()
 
@@ -468,11 +481,16 @@ class ValMeter(object):
         """
         Stop to record time.
         """
-        self.iter_timer.pause()
-        self.net_timer.pause()
+        if not self.iter_timer._paused:
+            self.iter_timer.pause()
+        
+        if not self.net_timer._paused:
+            self.net_timer.pause()
 
     def data_toc(self):
-        self.data_timer.pause()
+
+        if not self.data_timer._paused:        
+            self.data_timer.pause()
         self.net_timer.reset()
 
     def update_stats(self, top1_err, top5_err, mb_size, stats={}):

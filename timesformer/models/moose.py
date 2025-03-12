@@ -331,7 +331,7 @@ class BidirectionalCrossAttention(nn.Module):
             mask = default(mask, torch.ones((b, i), device = device, dtype = torch.bool))
             context_mask = default(context_mask, torch.ones((b, j), device = device, dtype = torch.bool))
             if(matrix_mask == None):
-                attn_mask = rearrange(mask, 'b i -> b 1 i 1') * rearrange(context_mask, 'b j -> b 1 1 j')
+                attn_mask = rearrange(mask, 'b i -> b 1 i 1') * rearrange(context_mask, 'b j -> b 1 1 j').to(device)
             elif(matrix_mask == 'arrow'):
                 # print(i, j)
                 attn_mask = arrow_matrix(i, 1).unsqueeze(0).repeat(b, 1, 1).unsqueeze(1).bool().to(device)#rearrange(mask, 'b i -> b 1 i 1') * rearrange(context_mask, 'b j -> b 1 1 j')
