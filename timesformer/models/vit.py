@@ -664,7 +664,7 @@ parser.add_argument('--small', action='store_true', help='use small model')
 parser.add_argument('--mixed_precision', action='store_true', help='use mixed precision')
 parser.add_argument('--alternate_corr', action='store_true', help='use efficent correlation implementation')
 
-raft_args = parser.parse_args(['--model', '/home/hongn/TimePSFormer/raft-things.pth', 
+raft_args = parser.parse_args(['--model', '/home/nguyentatcuong251204/MOTION-TPU/raft-things.pth', 
                         '--path', '/data2/hongn/RAFT/demo-frames/care'])
 # from timesformer.models.moose import BidirectionalCrossAttention
 
@@ -749,7 +749,9 @@ class MOOSE(nn.Module):
                                     visual_embeddings,
                                     motion_embeddings,
                                     mask = self.visual_mask,
-                                    context_mask = self.motion_mask
+                                    context_mask = self.motion_mask,
+                                    #Change here to run all version
+                                    matrix_mask="arrow"
                                 )
             video_embeddings = self.mlp(self.norm2(visual_embeddings))
         elif(self.fusion_mode == "viattention"):
