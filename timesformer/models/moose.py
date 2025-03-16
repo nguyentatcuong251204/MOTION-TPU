@@ -9,9 +9,9 @@ import numpy as np
 import torch
 from PIL import Image
 import torch.nn as nn
-from raft.raft import RAFT
-from raft.utils import flow_viz
-from raft.utils.utils import InputPadder
+from RAFT_clone.raft.raft import RAFT
+from RAFT_clone.raft.utils import flow_viz
+from RAFT_clone.raft.utils.utils import InputPadder
 from PIL import Image
 from einops import rearrange
 from .build import MODEL_REGISTRY
