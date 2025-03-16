@@ -518,7 +518,7 @@ class MotionPatchEmbed(nn.Module):
         x = self.proj(x).flatten(2).transpose(1, 2)
         return x
     
-from transformers import AutoImageProcessor, AutoModel
+#from transformers import AutoImageProcessor, AutoModel
 from timesformer.models.moose import *
 from torchvision.transforms import Resize
 
